@@ -1,3 +1,12 @@
+# ignore folders
+ABF/
+adiabatic_mapping/
+chlor-fluor-ethan/
+eABF/
+ethen/
+h2o/
+Umbrella/
+
 # ignore data files
 *.dat
 *.txt
