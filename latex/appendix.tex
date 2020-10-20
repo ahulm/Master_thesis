@@ -1,0 +1,65 @@
+\chapter{Appendix}
+\label{cha:appendix}
+
+\section{Reaction coordinates}
+\label{sec:reaction coordinates}
+
+In the present work valance angles and torsion angles were used as collective variables for Umbrella Sampling, metaD, ABF, eABF or meta-eABF simulations. Below analytic expressions for the calculation of both variables, their gradients, inverse gradients and divergence of inverse gradients are given.
+
+\subsection{Valence Angle}
+The valence angle $\theta$ between three Cartesian coordinates ($r_1, r_2, r_3$) is given by the dot product between bond distances $r_{ij}=r_j - r_i$:
+\begin{equation}
+  \cos \theta = \hat{r}_{21} \cdot \hat{r}_{23}
+\end{equation}
+The derivative of $\theta$ in Cartesian coordinates is then given by
+\begin{equation}
+  \frac{\partial \theta}{\partial r_1} = \frac{norm(\hat{r}_{21} \times (\hat{r}_{21} \times \hat{r}_{23}))}{|r_{12}|}
+\end{equation}
+\begin{equation}
+  \frac{\partial \theta}{\partial r_3} = \frac{norm(\hat{r}_{32} \times (\hat{r}_{21} \times \hat{r}_{23}))}{|r_{23}|}
+\end{equation}
+\begin{equation}
+  \frac{\partial \theta}{\partial r_2}= -\frac{\partial \theta}{\partial r_1} - \frac{\partial \theta}{\partial r_3}
+\end{equation}
+Choosing as inverse gradient $\textbf{v}_i = \nabla \theta/|\nabla \theta|^2$ the divergence of vector field $\textbf{v}_i$ is given by:
+\begin{equation}
+  \nabla \cdot \textbf{v}_i = \cot \theta
+\end{equation}
+
+\subsection{Torsion Angle}
+
+The torsion angle $\phi$ between four Cartesian coordinates ($r_1, r_2, r_3, r_4$) is given by:
+\begin{equation}
+  \tan \phi = \frac{(\hat{r}_{12} \times n_1) \cdot n_2}{n_1 \cdot n_2}
+\end{equation}
+with
+\begin{equation}
+  n_1 = r_{23} - (r_{12} \cdot \hat{r}_{23})\hat{r}_{23}
+\end{equation}
+\begin{equation}
+  n_2 = r_{34} - (r_{34} \cdot \hat{r}_{23})\hat{r}_{23}
+\end{equation}
+The derivative of $\phi$ in Cartesian coordinates is given by:
+\begin{equation}
+  \frac{\partial\phi}{\partial r_1} = - \frac{\hat{r}_{21}\times\hat{r}_{23}}{|r_{12}|\sin^2\theta_{123}}
+\end{equation}
+\begin{equation}
+  \frac{\partial\phi}{\partial r_4} = - \frac{\hat{r}_{34}\times\hat{r}_{23}}{|r_{34}|\sin^2\theta_{234}}
+\end{equation}
+\begin{equation}
+  \frac{\partial\phi}{\partial r_2} = c_{123}\frac{\partial\phi}{\partial r_1} - b_{432}\frac{\partial\phi}{\partial r_4}
+\end{equation}
+\begin{equation}
+  \frac{\partial\phi}{\partial r_3} = - \frac{\partial\phi}{\partial r_1} - \frac{\partial\phi}{\partial r_4} - \frac{\partial\phi}{\partial r_2}
+\end{equation}
+with
+\begin{equation}
+  c_{123} = \frac{|r_{12}|\cos\theta_{123}}{|r_{23}|}-1
+\end{equation}
+\begin{equation}
+  b_{432} = \frac{|r_{34}|\cos\theta_{234}}{|r_{23}|}
+\end{equation}
+Choosing as inverse gradient $\textbf{v}_i = \nabla \phi/|\nabla \phi|^2$ the divergence of vector field $\textbf{v}_i$ is zero:
+\begin{equation}
+  \nabla \cdot \textbf{v}_i = 0
+\end{equation}

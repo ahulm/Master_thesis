@@ -1,0 +1,308 @@
+\documentclass[
+	12pt,                      % Schriftgroesse 12pt
+	a4paper,                   % Layout fuer Din A4
+	english,                   % neue deutsche Rechtschreibung nach der Reform
+	oneside,                   % Layout fuer einseitigen Druck
+	headinclude,               % Kopfzeile wird Seiten-Layouts mit beruecksichtigt
+	headsepline,               % horizontale Linie unter Kolumnentitel
+	plainheadsepline,          % horizontale Linie auch beim plain-Style
+	BCOR=12mm,                  % Korrektur für die Bindung
+	DIV=18,                    % DIV-Wert für die Erstellung des Satzspiegels, siehe scrguide
+	parskip=half,              % Absatzabstand statt Absatzeinzug
+	openany,                   % Kapitel können auf geraden und ungeraden Seiten beginnen
+	bibliography=totoc,        % Literaturverz. wird in und sonstige verzeichnisse mit ins Inhaltsverzeichnis
+	numbers=noenddot,          % Kapitelnummern immer ohne Punkt
+	captions=tableheading,     % korrekte Abstaende bei TabellenUEBERschriften3
+	]{scrbook}[2001/07/30]     % scrbook-Version mind. 2.8j von 2001/07/30
+
+%##########################################################################################################
+%
+% Packete laden
+%
+%##########################################################################################################
+
+\usepackage[english]{babel}
+\usepackage[utf8]{inputenc}                    % Input-Encoding: ansinew for Windows
+\usepackage[T1]{fontenc}                       % T1-kodierte Schriften, korrekte Trennmuster für Worte mit Umlauten
+\usepackage{ae}                                % Für PDF-Erstellung
+
+\usepackage[
+	format=hang,
+	font={footnotesize, sf},
+	labelfont={bf},
+	margin=1cm,
+	aboveskip=5pt,
+	belowskip=5pt
+	]{caption,subfig}                          % mehrzeilige Captions ausrichten; subfig: Untergrafiken
+\usepackage{wrapfig}
+
+\usepackage[centertags]{amsmath}               % AMS-Mathematik, centertags zentriert Nummer bei split
+\usepackage{amssymb}                           % zusätzliche Symbole
+\usepackage{trfsigns} 					       % für bestimmte Symbole
+\usepackage{graphicx}                          % zum Einbinden von Grafiken
+\usepackage[svgnames,table,hyperref]{xcolor}
+\usepackage{float}                             % u.a. genaue Plazierung von Gleitobjekten mit H
+\usepackage{epsfig}                            % eps Format für Grafiken
+\usepackage[pdftex,pstarrows]{pict2e}
+\usepackage{array}
+\usepackage{listings}						   % Code-Einbindungsumgebung
+\usepackage{courier}                           % verwende Courier statt cmtt als monospace-schrift
+\usepackage{setspace}                          % Zeilenabstand einstellbar
+\usepackage{rotating}
+\onehalfspacing                                % eineinhalbzeilig einstellen
+\usepackage{longtable}					       % Ermöglicht Tabellen die über den Seitenumbruch gehen (s. Symbolverzeichnis)
+\usepackage{scrlayer-scrpage}
+\usepackage{scrhack}                         % Kopf und Fusszeilen-Layout passt besser zur Dokumentklasse KOMA-Skript (scrbook) als das Pake fancyhdr, sonst ziemlich gleichwertig
+\typearea[current]{current}                    % Neuberechnung des Satzspiegels mit alten Werten nach Ãƒâ€žnderung von Zeilenabstand,etc
+\usepackage{xcolor,colortbl}                   % Packet um Tabellen bunt auszufÃƒÂ¼llen
+\usepackage{wasysym}                           % Promillezeichen und co.
+\usepackage{tabularx}
+\usepackage{booktabs}
+\usepackage{multirow}
+\usepackage{braket}
+
+\usepackage[
+	backend=biber,
+	style=chem-angew,			% Style Angewante Chemie
+]{biblatex}     		 		% Biblatex Paket für Referenzen
+\addbibresource{literatur.bib}	% File were you store sources
+
+%##########################################################################################################
+%
+% PDF-Erzeugung: pdflatex statt latex aufrufen!
+%
+%##########################################################################################################
+
+\pdfoutput=1
+\usepackage[pdftex,  % muss letztes Package sein!
+	pdftitle={Perovscites for Photovoltaics},%
+	pdfauthor={Andreas Hulm},%
+	pdfsubject={Perovscites},%
+	pdfkeywords={ ... },%
+	pdfstartview={FitH},%
+	pdfstartpage={5},%
+	bookmarks,%
+	raiselinks,%
+	pageanchor,%
+	hyperindex,%
+	colorlinks,%
+	citecolor=black!60!black,%
+	linkcolor=black!70!black,%
+	urlcolor=magenta!70!black,%
+	filecolor=magenta!70!black,%
+	menucolor=orange!70!black,%
+    ]{hyperref}
+
+%##########################################################################################################
+%
+% New- and Renew-Commands
+%
+%##########################################################################################################
+
+
+\renewcommand{\headfont}{\normalfont\sffamily}             % Kolumnentitel serifenlos
+\renewcommand{\pnumfont}{\normalfont\ttfamily\bfseries}    % Seitennummern typewriter und fett
+\pagestyle{scrheadings}
+
+% Einkommentieren falls beidseitige Darstellung erwünscht!!! aktuell definiert: oneside -> Layout fuer einseitigen Druck
+
+%\ihead[]{\headmark}              % Kolumnentitel immer oben innen
+%\ohead[\pagemark]{\pagemark}     % Seitennummern immer oben aussen
+%\lefoot[]{}
+%\rofoot[]{}                      % Seitennummern in der Fusszeile loeschen
+
+\newcommand {\jkarray}[1]{\ensuremath{\underline{#1}}}
+\newcommand {\jkmatrix}[1]{\ensuremath{\underline{\underline{#1}}}}
+\newcommand {\einheit}[1]{\ensuremath{\mathrm{\left[#1\right]}}}
+\newcommand {\lived}[2]{($\ast$#1, $\dagger$#2)}  %
+
+
+
+%###########################################################################################################
+%
+% Parameter fÃƒÂ¼r die jeweiligen Packete definieren
+%
+%###########################################################################################################
+
+\lstdefinestyle{cppcode}{language={[Visual]C++},%
+	basicstyle=\ttfamily\footnotesize,%
+	keywordstyle={\color{Navy} \bfseries},%
+	identifierstyle={\color{DarkRed}},%
+	commentstyle={\color{DarkOrange!50!black}\slshape},%
+	stringstyle={\color{DarkGreen}},%
+	showstringspaces=false,%
+	backgroundcolor={\color{LightSkyBlue!40}},%
+	columns=fixed,%
+	keepspaces=true,%
+	basewidth={0.55em},%
+	frame=shadowbox,%
+	rulesepcolor=\color{Gray},%
+	breaklines=true,%
+	numbers=left,%
+	numberstyle=\tiny,%
+	escapeinside={Ã‚Â°(}{)Ã‚Â°},%
+	moredelim={[is][\bfseries]{Ã‚Â°^}{^Ã‚Â°}},%
+	belowcaptionskip=0.5cm%
+	}%
+
+\lstdefinestyle{fort}{language={[95]Fortran},%
+	basicstyle=\ttfamily\small,%
+	keywordstyle={\color{Navy} \bfseries},%
+	identifierstyle={\color{DarkRed}},%
+	commentstyle={\color{DarkOrange!50!black}\slshape},%
+	stringstyle={\color{DarkGreen}},%
+	showstringspaces=false,%
+	backgroundcolor={\color{LightSkyBlue!40}},%
+	columns=fullflexible,%
+	keepspaces=true,%
+	basewidth={0.6em},%
+	rulesepcolor=\color{Gray},%
+	frame=shadowbox,%
+	escapeinside={Ã‚Â°(}{)Ã‚Â°},%
+	moredelim={[is][\bfseries]{Ã‚Â°^}{^Ã‚Â°}},%
+	belowcaptionskip=0.5cm%
+	}%
+
+
+\lstdefinestyle{pseudocode}{basicstyle=\ttfamily\small,%
+	columns=fixed,%
+	keepspaces=true,%
+	basewidth={0.55em},%
+	frame=shadowbox,%
+	backgroundcolor={\color{LightSkyBlue!40}},%
+	rulesepcolor=\color{Gray},%
+	escapeinside={Ã‚Â°(}{)Ã‚Â°},%
+	moredelim={[is][\bfseries]{Ã‚Â°^}{^Ã‚Â°}},%
+	belowcaptionskip=0.5cm%
+	}%
+
+\lstdefinestyle{maple}{%
+	basicstyle=\sffamily\small\color{Red}\bfseries,%
+	rulecolor=\color{Black},%
+	columns=fixed,%
+	keepspaces=true,%
+	basewidth={0.55em},%
+	frame=shadowbox,%
+	numbers=left,%
+	numberstyle=\tiny\color{Black},%
+	numberblanklines=false,%
+	rulesepcolor=\color{Gray},%
+	breaklines=true,%
+	breakautoindent=true,%
+	backgroundcolor={\color{LightBlue!60}},%
+	rulesepcolor=\color{Gray},%
+	escapeinside={Ã‚Â°(}{)Ã‚Â°},%
+	moredelim={[is][\bfseries]{Ã‚Â°^}{^Ã‚Â°}},%
+	belowcaptionskip=0.5cm%
+	}%
+
+\lstdefinestyle{matlab}{language={Matlab},%
+	basicstyle=\ttfamily\small,%
+	keywordstyle={\color{Navy} \bfseries},%
+	identifierstyle={\color{DarkRed}},%
+	commentstyle={\color{DarkOrange!50!black}\slshape},%
+	stringstyle={\color{DarkGreen}},%
+	showstringspaces=false,%
+	backgroundcolor={\color{LightSkyBlue!30}},%
+	breaklines=true,%
+	breakautoindent=true,%
+	columns=fullflexible,%
+	keepspaces=true,%
+	basewidth={0.6em},%
+	rulesepcolor=\color{Gray},%
+	frame=shadowbox,%
+	numbers=left,%
+	numberstyle=\tiny\color{Black},%
+	escapeinside={Ã‚Â°(}{)Ã‚Â°},%
+	moredelim={[is][\bfseries]{Ã‚Â°^}{^Ã‚Â°}},%
+	belowcaptionskip=0.5cm%
+	}%
+
+\lstdefinelanguage{Python}{
+	basicstyle=\ttfamily\small,%
+	keywordstyle={\color{Navy} \bfseries},%
+ 	keywords={typeof, null, catch, switch, in, int, str, float, self, boolean, throw, import,return, class, if ,elif, endif, while, do, else, True, False , catch, def, from, for},
+ 	identifierstyle=\color{black},
+	comment=[l]{\#},
+	commentstyle={\color{gray}\slshape},%
+	stringstyle={\color{DarkGreen}},%
+	backgroundcolor={\color{LightSkyBlue!30}},%
+	breaklines=true,%
+	breakautoindent=true,%
+	columns=fullflexible,%
+	keepspaces=true,%
+	basewidth={0.6em},%
+	rulesepcolor=\color{Gray},%
+	frame=shadowbox,%
+	numbers=left,%
+	numberstyle=\tiny\color{Black},%
+	escapeinside={Ã‚Â°(}{)Ã‚Â°},%
+	moredelim={[is][\bfseries]{Ã‚Â°^}{^Ã‚Â°}},%
+ 	sensitive=false,
+ 	morecomment=[s]{/*}{*/},
+	belowcaptionskip=0.5cm%
+}
+
+\graphicspath{{figs/}{bilder/}{plots/}}    % Falls texinput nicht gesetzt -> Bildverzeichnisse
+
+% hier sind Worte zu definieren die in der Worttrennung falsch oder nicht erkannt werden!
+
+\hyphenation{Post-pro-cess-ing--In-te-gral}
+
+
+%###########################################################################################################
+%
+% Aufbau des Dokuments -> Einfügen der einzelnen Teile
+%
+%###########################################################################################################
+
+% '''''''''''''''''''''''''''''''''''''''''''''''''''''''''''''''''''''
+\newcommand{\sectionnumbering}[1]{%
+	\setcounter{section}{0}%
+	\renewcommand{\thesection}{\csname #1\endcsname{section}}}
+% '''''''''''''''''''''''''''''''''''''''''''''''''''''''''''''''''''''
+
+\newcounter{romanPagenumber} % neuen Seitenzähler als Variable definieren
+
+\begin{document}
+
+	\frontmatter
+
+	\setheadsepline{0.0pt} 		  %Dicke der Trennlinie Kopfzeile - Text -> für Erklärung Änderungen ausschalten und erst ab Kurzzusammenfassung beginnen!
+
+	\pagenumbering{Roman}         % romanische Nummerierung für die Deckblätter, Inhaltsverzeichnis und co.
+
+	%\include{deckblatt_teil1}     % Deckblatt Titel
+	%\include{symbols}
+
+	\setheadsepline{0.5pt}        % Dicke der Trennlinie Kopfzeile - Text
+
+	\tableofcontents              % Inhaltsverzeichnis
+
+	\clearpage
+
+	\setcounter{romanPagenumber}{\value{page}} % eigener Seitenzähler erhält aktuelle römische Seitenzahl
+
+	\mainmatter                   % den Hauptteil beginnen
+	\pagenumbering{arabic}        % ab hier wieder arabische Nummerierung
+
+	%\include{introduction}
+	\include{theory}
+	\include{appendix}
+
+	\appendix                     % Anhang
+	\backmatter
+
+	\pagenumbering{Roman}                    % für letzte Verzeichnisse wieder romanische Nummerierung
+	\sectionnumbering{Roman}
+	\setcounter{page}{\theromanPagenumber}   % setzt die aktuelle Seitenzahl von vorne für die romanische Nummerierung fest
+
+	\listoftables
+	\listoffigures
+
+%    \nocite{*}								 % auch Quellen die nicht verwendet wurden tauchen in Literaturverzeichnis auf
+	\inputencoding{utf8}
+	\printbibliography[title=Bibliography]   % gibt Literaturverzeichnis aus
+
+
+\end{document}

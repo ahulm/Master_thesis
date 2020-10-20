@@ -1,0 +1,114 @@
+\chapter{Theory}
+\label{cha:theory}
+
+\section{Statistical Thermodynamics and Free Energy}
+
+\section{Umbrella Sampling (US)}
+\label{sec:umbrella theory}
+
+\section{Adaptive Biasing Methods}
+\label{sec:adaptive biasing}
+
+\subsection{Adaptive Biasing Force Method (ABF)}
+\label{sec:ABF}
+
+The intuition behind ABF is, that adding a force $A'[\xi(\textbf{x})]\nabla\xi(\textbf{x})$ that exactly compensates the average of the original force $-\nabla V(\textbf{x})$ along a given coordinate would result in uniform sampling along this coordinate.\autocite{comer2015adaptive}
+Historically, this idea emerged from thermodynamic integration (TI), were the free energy derivative  is computed as the ensemble average of the instantaneous force, $F$, acting along a given reaction coordinate $\xi: \mathbb{R} ^{3N} \to \mathbb{R}$:
+\begin{equation}
+\frac{dA}{d\xi} = -\braket{F}_{\xi}
+\end{equation}
+and the free energy is calculated as the integral over this force.\autocite{kirkwood1935statistical,zwanzig1954high}
+In practice, as one has no prior knowledge of the free energy derivative, ABF uses an on-the-fly estimate of the mean force acting along the reaction coordinate. For this purpose the transition coordinate $\xi$, connecting two end points, is divided in $M$ equally spaced bins. The approximation of the bias force $\overline{F}(N_{Step},k)$ in bin $k$ is than the average of all collected force samples:\autocite{comer2015adaptive}
+\begin{equation}
+  \overline{F}(N_{Step},k) = \frac{R(N_{Step},k)}{N_{Step}^{k}} \sum_{\mu=1}^{N_{Step}^{k}} F_{\mu}^{k}
+  \label{eq:mean force}
+\end{equation}
+\begin{equation}
+  R(N_{Step},k)=\left\{\begin{array}{ll} \frac{1}{N_{full}}, & N_{Step}^{k} < N_{full} \\
+                                         1,          & N_{Step}^{k} \geq  N_{full} \end{array}\right. \label{eq:ramp}
+\end{equation}
+with the linear ramp function $R(N_{Step},k)$ preventing large fluctuations of the running estimate of the average force at the beginning of the simulation from driving the system away from equilibrium. The number of samples when the full biasing force is applied, $N_{full}$, and the bin size are the only free parameters that have to be chosen by the user before the simulation. For a sufficiently large $N_{Step}$ equation \ref{eq:mean force} approaches the correct average force in each bin and the free energy difference $\Delta A$ can be estimated by the numerically integrating over the force estimates in individual bins:\autocite{comer2015adaptive}
+\begin{equation}
+  \Delta A_{\xi} = - \sum_{k=1}^{M} \overline{F}(N_{Step},k) \delta \xi
+\end{equation}
+
+The last missing ingredient for the ABF method is an explicit expression for the instantaneous force $F_{\xi}$. Carter et al.\autocite{carter1989constrained} gave a first general expression:
+\begin{equation}
+  F(\xi,\textbf{q}) = -\frac{\partial V(\xi,\textbf{q})}{\partial \xi} + \beta^{-1} \frac{\partial \ln|J(\xi,\textbf{q})|}{\partial\xi}
+\end{equation}
+which depends implicitly on a vector field $\partial x_i / \partial \xi$, hereafter referred to as "inverse gradient" and on an Jacobian correction term purely geometric in origin. The inverse gradient can be thought of as direction along which an infinitesimal change in $\xi$ is propagated in Cartesian coordinates, the complementary coordinates $\textbf{q}$ being kept constant. A major drawback of this formalism is the requirement of an full coordinate transform from Cartesian coordinates ($\textbf{x}$) to generalized coordinates ($\xi$, $\textbf{q}$).
+
+This requirement could be lifted by den Otter\autocite{den2000thermodynamic}, who put forward the breakthrough idea that the change in $\xi$ can be propagated along an arbitrary vector field $\textbf{v}_i$ ($\mathbb{R}^{3N} \to \mathbb{R}^{3N}$), provided it satisfies some orthonormality conditions.
+Extended to multidimensional reaction coordinates \textbf{$\xi$} = ($\xi_i$) and in presence of a set of constraints $\sigma_{k}(\textbf{x})=0$ these read:\autocite{ciccotti2005blue}
+\begin{equation}
+  \textbf{v}_i \cdot \nabla \xi_j = \delta_{ij} \label{eq:cond1}
+\end{equation}
+\begin{equation}
+  \textbf{v}_i \cdot \nabla \sigma_k = 0 \label{eq:cond2}
+\end{equation}
+Although this leaves relative freedom choosing $\textbf{v}_i = \nabla \xi/|\nabla \xi|^2$ is always a valid option as long as all reaction coordinates $\xi_i$ are orthogonal to each other.
+The instantaneous force than reduces to
+\begin{equation}
+  F(\xi_i,\textbf{x}) = -\nabla V(\textbf{x}) \cdot \textbf{v}_i + \beta^{-1} \nabla \cdot \textbf{v}_i
+\end{equation}
+but still involves the calculation of second derivatives in the form of the divergence of vector fields $\textbf{v}_i$.\autocite{comer2015adaptive} In practice, analytical derivation is possible for many different reaction coordinates, but can become cumbersome.\autocite{fiorin2013using} Analytic expressions for bend angles and torsion angles, that were used in the present work are given in the appendix \ref{sec:reaction coordinates}.
+
+\subsection{extended Adaptive Biasing Force Method (eABF)}
+\label{sec:eABF}
+To circumvent the technical requirements of ABF for collective variables, namely being orthogonal to one-another and to constraints, Lesage et al.\autocite{lesage2017smoothed} proposed an more flexible approach named eABF.
+In eABF the physical system is extended by additional coordinates $\lambda$ with mass $m_{\lambda}$, which are coupled to the reaction coordinates $\xi_i$ with harmonic potentials. The extended system ($\textbf{x}$, $\lambda$) evolves according to Langevin dynamics in the extended potential
+\begin{equation}
+  V^{ext}(\textbf{x},\lambda_i) = V(\textbf{x}) + \frac{k_i}{2}(\xi_{i}(\textbf{x}x)-\lambda_i)^2.
+\end{equation}
+The key intuition behind eABF is, that in the tight coupling limit efficient sampling of $\lambda$ will result in efficient sampling of $\xi$. Therefore, to obtain uniform sampling along $\xi$ biasing of $\lambda$ is sufficient. The inverse gradient is chosen as null for all physical coordinates ($\textbf{x}$) and 1 for $\lambda$. This way the constraints \ref{eq:cond1} and \ref{eq:cond2} are always satisfied, which is especially useful for calculations involving a set of non-orthogonal reaction coordinate.
+Sampling the extended system gives the following unbiased Boltzmann distribution in $\lambda$:
+\begin{equation}
+\begin{aligned}
+  \rho^k(\lambda) &\propto
+  \int \exp \biggl[-\beta \biggl(V(\textbf{x})+\frac{k}{2}(\xi(\textbf{x})-\lambda)^2 \biggr) \biggr] d\textbf{x} \\
+  &= \int \exp \biggl[-\beta V(\textbf{x})+\frac{(\xi(\textbf{x})-\lambda)^2}{2\sigma^2} \biggr] d\textbf{x}
+\end{aligned}
+\end{equation}
+which depends on the force constant $k$ or variance of the Gaussian kernel $\sigma^2=(\beta k)^{-1}$.
+The bias on $\lambda$ is the running average over the spring force in $\lambda$-bin k:
+\begin{equation}
+  \overline{F}(\lambda_{i}, k) = \frac{\delta A^{k}(\lambda_{i})}{\delta \lambda_i} = \frac{1}{N_{Step}^{k}} \sum_{\mu=1}^{N_{Step}^{k}} k(\lambda_{i,\mu}^{k}-\xi_{i,\mu}^{k})
+\end{equation}
+For small values of $N_{Step}^{k}$ the linear ramp function $R(N_{Step},k)$ given by equation \ref{eq:ramp} is used like in normal ABF. This generates the following time-dependent biased Boltzmann distribution:
+\begin{equation}
+  \tilde{\rho}(\lambda) \propto \int \exp \biggl[-\beta V(\textbf{x})+\frac{(\xi(\textbf{x})-\lambda)^2}{2\sigma^2} - A^{k}(\lambda) \biggr) \biggr] d\textbf{x}
+\end{equation}
+By using $\int \delta(\xi(\textbf{x})-z)dz=1$ and $A^k(\lambda)=-\beta^{-1}\ln\rho^k(\lambda)$ one can obtain the relationship between unbiased and biased z-distributions:
+\begin{equation}
+  \tilde{\rho}(z) =  \rho(z) \int \frac{\exp \bigl(-\frac{(\lambda-z)^2}{2\sigma^2}\bigr)}
+  {\int \exp\bigl(-\frac{(\lambda-z')^2}{2\sigma^2}\bigr)\rho(z')dz'} d\lambda
+\end{equation}
+For the tight coupling limit (high $k$, low $\sigma$) the unbiased distribution $\rho(z)$ is recovered and eABF recovers the behavior of standard ABF. In this case $A^k(\lambda)$  approximates the physical free energy $A(z)$ and the $\Delta A_{z}$ can be approximated by integrating over the converged bias forces on $\lambda$, $\overline{F}(\lambda_{i}, k)$, which will be referred to as "naive estimator" hereafter.
+
+An asymptotically unbiased estimator of the free energy can be derived by correcting the free energy gradient obtained from the eABF-biased distribution $\tilde{\rho}(z)$ with the average biasing force on z
+\begin{equation}
+  \frac{\delta A(z)}{\delta z_i} = -\beta^{-1}\frac{\delta \ln \tilde{\rho}(z)}{\delta z_i} + k(\braket{\lambda_i}_{z}-z_{i})
+\end{equation}
+which is called "Corrected z-averaged restraint" (CZAR) and can be calculated numerically from the time trajectory ($z_i$,$\lambda_i$) in an post-processing step.\autocite{lesage2017smoothed}
+
+\subsection{Well-Tempered Metadynamics (WT-MetaD)}
+\label{sec:metaD}
+
+MetaD biases a systems dynamic towards undersampled regions along the reaction coordinate $\xi$, by accumulating repulsive potentials in regions that have already been visited. The bias potential is typically build by a superposition of repulsive Gaussian kernels and can be written:\autocite{barducci2011metadynamics}
+\begin{equation}
+  V^{bias}(\xi,t)= \sum_{k}^{\frac{t}{\tau_G}} \tau_G \omega \exp\biggr(-\sum_{i=1}^{N_{dim}} \frac{1}{2\sigma_{i}^{2}} (\xi_{i}(\textbf{x})-\xi_{i}(\textbf{x},t_k))^2 \biggl)
+\end{equation}
+with deposition rate $\tau_G$, Gaussian height $\omega=W/\tau_G$ and variance $\sigma^2$ as free parameters that have to be chosen before the simulation. In practice $V^{bias}(\xi,t)$ is stored on a grid and updated every $\tau_G$ time steps for computational efficiency. Over the course of a simulation the bias potential fills local minima along the reaction coordinate until the systems evolution finally resembles a Brownian motion along the flattened free energy surface. The converged potential provides an unbiased estimate of the underlying free energy surface:
+\begin{equation}
+  V^{bias}(\xi, t \to \infty) = - F(\xi) + C
+\end{equation}
+To avoid oscillation of $V^{bias}$ around the correct free energy WT-metaD introduces an additional scaling factor of the Gaussian height:\autocite{barducci2008well}
+\begin{equation}
+  \omega(\xi,t) = \frac{W}{\tau_G}\exp\biggl(\frac{V^{bias}(\xi,t)}{k_B \Delta T} \biggr)
+\end{equation}
+This ensures an decrease of Gaussion height over time. However, the bias potential does not fully compensate the free energy surface any more, but can be controlled by parameter $\Delta T$. For $T \to 0$ the bias is zero and ordinary MD is recovered, whereas the limit $\Delta T \to \infty$ corresponds to normal metaD. To obtain the correct free energy the new bias potential has to be corrected by:
+\begin{equation}
+F(\xi) = -\frac{T+\Delta T}{\Delta T}V^{bias}(\xi, t) = -(T-\Delta T)\ln \biggl(1+\frac{\omega \rho(\xi, t)}{\Delta T} \biggr)
+\end{equation}
+
+\subsection{Meta-eABF}
