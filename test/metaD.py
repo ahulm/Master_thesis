@@ -11,6 +11,9 @@ kB_a    = kB / H_in_J       # Hartree / K
 
 def metaD(self, ats, variance=1.0, height=0.1, time_int=20, WT=True, dT=20):
     '''Metadynamics and Well-Tempered Metadynamics
+    
+    
+
     '''			
     # get reaction coordinate
     (xi, delta_xi) = get_coord(self, ats)
@@ -27,7 +30,6 @@ def metaD(self, ats, variance=1.0, height=0.1, time_int=20, WT=True, dT=20):
         self.grid       = np.array([self.minx+i*self.dx+self.dx/2 for i in range(self.nbins)])
         self.bias_pot   = np.array(np.zeros((len(ats),self.nbins)), dtype=np.float64)
         self.bias_force = np.array(np.zeros((len(ats),self.nbins)), dtype=np.float64)
-        
         self.traj       = np.array([xi])
     
     else:

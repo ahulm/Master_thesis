@@ -31,11 +31,11 @@ potential       = '3'
 
 # metadynamics
 ats = [[4,-50.0,50.0]]
-variance = 2.0
-height = 0.08
+variance = 1.0
+height = 0.1
 tau = 20
 WT = True
-dT = 700.0 
+dT = 2000.0 
 
 # US
 #ats = [[1,0.0,1000.0]]
