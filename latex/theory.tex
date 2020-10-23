@@ -15,7 +15,7 @@ There are multiple adaptive biasing methods available, only differing in the cho
 
 In principle adaptive biasing methods only rely on the sampling of the canonical ensemble. One simple way to achieve this is using Langevin dynamics with sufficiently soft damping and small stochastic forces. A schematic procedure of adaptively biased Langevin dynamics is given in Algorithm \ref{alg:ABM}.
 \begin{algorithm}[H]
-  \caption{Velocity Verlet routine for adaptively biased Langevin dynamics.}
+  \caption{Velocity Verlet integrator for adaptively biased Langevin dynamics with atomic masses $\textbf{M}$, coordinates $\textbf{x}(t)$, momenta $\textbf{p}(t)$, potential $V(\textbf{x}(t))$ and forces $F(\textbf{x}(t))$, friction coefficient $\gamma$,}
   \label{alg:ABM}
     \begin{algorithmic}
       \WHILE{$t < t_{end}$}
@@ -23,16 +23,16 @@ In principle adaptive biasing methods only rely on the sampling of the canonical
             \STATE $\textbf{p}(t+\frac{1}{2}\Delta t) \leftarrow \textbf{p}(t) + \frac{1}{2} \bigl(F(\textbf{x}(t))dt-\gamma \textbf{M}^{-1}\textbf{p}(t) dt + \sqrt{2\gamma\beta^{-1}}dW_t \bigr)$
         \STATE /* Get momenta at half time step
         \STATE
-            \STATE $\textbf{x}(t+\Delta t) \leftarrow \textbf{x}(t) + \textbf{M}^{-1} \textbf{p}(t+\frac{1}{2}\Delta t) dt$
+            \STATE $\textbf{x}(t+\Delta t) \leftarrow \textbf{x}(t) + \frac{2}{2+\gamma dt}\textbf{M}^{-1} \textbf{p}(t+\frac{1}{2}\Delta t) dt$
         \STATE /* Propagate coordinates
         \STATE
         \STATE $F(\textbf{x},t+\Delta t) \leftarrow - \nabla V(\textbf{x}(t+\Delta t))$
-        \STATE /* get QM or MM forces $F(\textbf{x}(t)$ for new coordinates
+        \STATE /* get QM or MM forces $F(\textbf{x}(t))$ for new coordinates
         \STATE
-        \STATE $F(\textbf{x},t) \leftarrow F(\textbf{x},t) + F^{bias}(\textbf{x},t)$
+        \STATE $F(\textbf{x},t+\Delta t) \leftarrow F(\textbf{x},t+\Delta t) + F^{bias}(\textbf{x},t+\Delta t)$
         \STATE /* call adaptive biasing routine to update bias force
         \STATE
-            \STATE $\textbf{p}(t) = \textbf{p}(t+\frac{1}{2}\Delta t) - \frac{1}{2} \bigl(F(\textbf{x}(t+\Delta t))dt-\gamma \textbf{M}^{-1}\textbf{p}(t+\frac{1}{2}\Delta t)) dt + \sqrt{2\gamma\beta^{-1}}dW\bigr)$
+            \STATE $\textbf{p}(t) = \frac{2 - \gamma dt}{2+\gamma dt} \textbf{p}(t+\frac{1}{2}\Delta t) - \frac{1}{2} \bigl(F(\textbf{x}(t+\Delta t))dt-\gamma \textbf{M}^{-1}\textbf{p}(t+\frac{1}{2}\Delta t)) dt + \sqrt{2\gamma\beta^{-1}}dW\bigr)$
         \STATE /* Get momenta at full time step
         \STATE
       \ENDWHILE
@@ -45,25 +45,25 @@ In principle adaptive biasing methods only rely on the sampling of the canonical
 
 MetaD biases a systems dynamic towards undersampled regions along the reaction coordinate $\xi(\textbf{x})$, by accumulating repulsive potentials in regions that have already been visited. The bias potential is typically build by a superposition of repulsive Gaussian kernels and can be written:\autocite{barducci2011metadynamics}
 \begin{equation}
-  V^{bias}(\xi,t)= \sum_{k}^{\frac{t}{\tau_G}} \tau_G \omega \exp\biggr(-\sum_{i=1}^{N_{dim}} \frac{1}{2\sigma_{i}^{2}} (\xi_{i}(\textbf{x})-\xi_{i}(\textbf{x},t_k))^2 \biggl)
+  V^{bias}(\xi,t)= \sum_{k<\frac{t}{\tau_G}} \tau_G \omega \exp\biggr(-\sum_{i=1}^{N_{dim}} \frac{1}{2\sigma_{i}^{2}} (\xi_{i}(\textbf{x})-\xi_{i}(\textbf{x},t_k))^2 \biggl)
 \end{equation}
-with deposition rate $\tau_G$, Gaussian height $\omega=W/\tau_G$ and variance $\sigma^2$ as free input parameters. In practice $V^{bias}(\xi,t)$ is stored on a grid and updated every $\tau_G$ time steps for computational efficiency. Over the course of a simulation the bias potential fills local minima along the reaction coordinate until the systems evolution finally resembles a Brownian motion along the flattened free energy surface. The converged potential provides an unbiased estimate of the underlying free energy surface
+with deposition rate $\tau_G$, Gaussian height $\omega=W/\tau_G$ and variance $\sigma^2$ as free input parameters. In practice $V^{bias}(\xi,t)$ is stored on a grid and updated every $\tau_G$ time steps for computational efficiency. Over the course of a simulation the bias potential fills local minima along the reaction coordinate until the systems evolution finally resembles a Brownian motion along the flattened free energy surface. The converged bias potential provides an unbiased estimate of the underlying free energy surface
 \begin{equation}
   V^{bias}(\xi, t \to \infty) = - F(\xi) + C
 \end{equation}
-To avoid oscillation of $V^{bias}$ around the correct free energy WT-metaD introduces an additional scaling factor of the Gaussian height:\autocite{barducci2008well}
+To avoid oscillation of $V^{bias}$ around the correct free energy, WT-metaD introduces an additional scaling factor of the Gaussian height:\autocite{barducci2008well}
 \begin{equation}
-  \omega(\xi,t) = \frac{W}{\tau_G}\exp\biggl(\frac{V^{bias}(\xi,t)}{k_B \Delta T} \biggr)
+  \omega(\xi,t) = \frac{W}{\tau_G}\exp\biggl(-\frac{V^{bias}(\xi,t)}{k_B \Delta T} \biggr)
 \end{equation}
-ensuring an decrease of $\omega$ over time and smooth convergence of $V^{bias}(\xi,t)$. However, the bias potential does not fully compensate the free energy surface any more, but can be controlled by parameter $\Delta T$. For $T \to 0$ the bias is zero and ordinary MD is recovered, whereas the limit $\Delta T \to \infty$ corresponds to normal metaD. To obtain a unbiased free energy estimate from $V^{bias}(\xi,t)$ it has to be scaled accordingly:
+ensuring an decrease of $\omega$ over time and smooth convergence of $V^{WTbias}(\xi,t)$. However, the new bias potential does not fully compensate the free energy surface, but can be controlled by parameter $\Delta T$. For $T \to 0$ the bias is zero and ordinary MD is recovered, whereas the limit $\Delta T \to \infty$ corresponds to normal metaD. To obtain a unbiased free energy estimate from $V^{WTbias}(\xi,t)$ it has to be scaled accordingly:
 \begin{equation}
-F(\xi) = -\frac{T+\Delta T}{\Delta T}V^{bias}(\xi, t) = -(T-\Delta T)\ln \biggl(1+\frac{\omega \rho(\xi, t)}{\Delta T} \biggr)
+F(\xi) = -\frac{T+\Delta T}{\Delta T}V^{WTbias}(\xi, t)
 \end{equation}
 
 \subsection{Adaptive Biasing Force Method (ABF)}
 \label{sec:ABF}
 
-The intuition behind ABF is, that adding a force $A'[\xi(\textbf{x})]\nabla\xi(\textbf{x})$ that exactly compensates the average of the original force $-\nabla V(\textbf{x})$ along a given coordinate would result in uniform sampling along this coordinate.\autocite{comer2015adaptive}
+The intuition behind ABF is, that adding a force $A'(\xi(\textbf{x}))\nabla \xi(\textbf{x})$ that exactly compensates the average of the original force $-\nabla V(\textbf{x})$ along a given coordinate would result in uniform sampling along this coordinate.\autocite{comer2015adaptive}
 Historically, this idea emerged from thermodynamic integration (TI), were the free energy derivative  is computed as the ensemble average of the instantaneous force, $F$, acting along a given reaction coordinate $\xi: \mathbb{R} ^{3N} \to \mathbb{R}$:
 \begin{equation}
 \frac{dA}{d\xi} = -\braket{F}_{\xi}
@@ -109,7 +109,7 @@ but still involves the calculation of second derivatives in the form of the dive
 To circumvent the technical requirements of ABF for collective variables, namely being orthogonal to one-another and to constraints, Lesage et al.\autocite{lesage2017smoothed} proposed an more flexible approach named eABF.
 In eABF the physical system is extended by additional coordinates $\lambda$ with mass $m_{\lambda}$, which are coupled to the reaction coordinates $\xi_i$ with harmonic potentials. The extended system ($\textbf{x}$, $\lambda$) evolves according to Langevin dynamics in the extended potential
 \begin{equation}
-  V^{ext}(\textbf{x},\lambda_i) = V(\textbf{x}) + \frac{k_i}{2}(\xi_{i}(\textbf{x}x)-\lambda_i)^2.
+  V^{ext}(\textbf{x},\lambda_i) = V(\textbf{x}) + \frac{k_i}{2}(\xi_{i}(\textbf{x})-\lambda_i)^2.
 \end{equation}
 The key intuition behind eABF is, that in the tight coupling limit efficient sampling of $\lambda$ will result in efficient sampling of $\xi$. Therefore, to obtain uniform sampling along $\xi$ biasing of $\lambda$ is sufficient. The inverse gradient is chosen as null for all physical coordinates ($\textbf{x}$) and 1 for $\lambda$. This way the constraints \ref{eq:cond1} and \ref{eq:cond2} are always satisfied, which is especially useful for calculations involving a set of non-orthogonal reaction coordinates.
 Sampling the extended system gives the following unbiased Boltzmann distribution in $\lambda$:
@@ -117,7 +117,7 @@ Sampling the extended system gives the following unbiased Boltzmann distribution
 \begin{aligned}
   \rho^k(\lambda) &\propto
   \int \exp \biggl[-\beta \biggl(V(\textbf{x})+\frac{k}{2}(\xi(\textbf{x})-\lambda)^2 \biggr) \biggr] d\textbf{x} \\
-  &= \int \exp \biggl[-\beta V(\textbf{x})+\frac{(\xi(\textbf{x})-\lambda)^2}{2\sigma^2} \biggr] d\textbf{x}
+  &= \int \exp \biggl[-\beta V(\textbf{x}) - \frac{(\xi(\textbf{x})-\lambda)^2}{2\sigma^2} \biggr] d\textbf{x}
 \end{aligned}
 \end{equation}
 which depends on the force constant $k$ or variance of the Gaussian kernel $\sigma^2=(\beta k)^{-1}$.
@@ -127,7 +127,7 @@ The bias on $\lambda$ is the running average over the spring force in $\lambda$-
 \end{equation}
 For small values of $N_{Step}^{k}$ the linear ramp function $R(N_{Step},k)$ given by equation \ref{eq:ramp} is used like in normal ABF. This generates the following biased Boltzmann distribution:
 \begin{equation}
-  \tilde{\rho}(\lambda) \propto \int \exp \biggl[-\beta V(\textbf{x})+\frac{(\xi(\textbf{x})-\lambda)^2}{2\sigma^2} - A^{k}(\lambda) \biggr) \biggr] d\textbf{x}
+  \tilde{\rho}(\lambda) \propto \int \exp \biggl[-\beta V(\textbf{x})-\frac{(\xi(\textbf{x})-\lambda)^2}{2\sigma^2} + A^{k}(\lambda) \biggr) \biggr] d\textbf{x}
 \end{equation}
 By using $\int \delta(\xi(\textbf{x})-z)dz=1$ and $A^k(\lambda)=-\beta^{-1}\ln\rho^k(\lambda)$ one can obtain the relationship between unbiased and biased z-distributions:
 \begin{equation}
