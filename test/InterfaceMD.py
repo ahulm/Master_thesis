@@ -26,7 +26,7 @@ class MD:
     # Init Vars
 
     self.step     = 0
-    self.coords   = np.array(coords_in) / bohr2angs
+    self.coords   = np.array(coords_in) 
     self.natoms   = 1
     self.dt_fs    = dt_in
     self.dt       = dt_in / it2fs
@@ -111,15 +111,17 @@ class MD:
 
     if potential == '1':
       
-      a = 1.4e-6 / H_in_kJmol
-      b = 0.5    / H_in_kJmol
+      a = 1.4e-6 / H_in_kJmol 
+      b = 0.5    / H_in_kJmol 
+      d = 40.0   / bohr2angs
+      e = 80.0   / bohr2angs
 
       s1 = (x-d)*(x-d)
-      s2 = (x+d)*(x+d)
+      s2 = (x-e)*(x-e)
 
       self.epot = a * s1*s2 + b * y*y
     
-      self.forces[0] = 2.0 * a * ((x-d) * s2 + s1 * (x+d))
+      self.forces[0] = 2.0 * a * ((x-d) * s2 + s1 * (x-e))
       self.forces[1] = 2.0 * b * y
     
     elif potential == '2':

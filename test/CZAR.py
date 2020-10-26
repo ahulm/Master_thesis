@@ -11,13 +11,13 @@ def ABF_estimator(data):
     '''Integrate A'(z) 
     '''
     df = data.copy()
+    df = df.iloc[::-1,:]
     dxi = df.iloc[1,1]-df.iloc[0,1]
     df['dA'] = [0.0 for i in range(len(df))]
-    for i in range(len(df)):
-        df.iloc[i,5] = np.sum(np.array(df.iloc[0:i,4],dtype=np.float64))*dxi/bohr2angs
-    df.iloc[:,5] -= df.iloc[:,5].min()
-    df.iloc[:,5] *= H_in_kJmol
-    
+    for i in range(len(df)-1):
+        df.iloc[i,6] = np.sum(np.array(df.iloc[0:i,4],dtype=np.float64))*dxi
+    df.iloc[:,6] -= df.iloc[:,6].min()
+    df.iloc[:,6] *= H_in_kJmol
     return df
 
 def ABF2D_integrator(F, dx, dy):

@@ -30,9 +30,11 @@ def eABF(self, ats, sigma = 2.0, tau = 10000.0):
         self.ramp_count = np.array([item[4] for item in ats])
         
         self.nbins      = int(np.prod(np.floor(np.abs(self.maxx-self.minx)/self.dx))) 
+        self.binfactor  = int(np.floor(np.abs(self.maxx[0]-self.minx[0])/self.dx[0]))
         self.bin_list   = np.array(np.zeros(self.nbins), dtype=np.int32)
         self.biases     = np.array(np.zeros((len(ats), self.nbins)), dtype=np.float64)
-        
+        self.grid       = np.array([self.minx+8*self.dx for i in range(self.nbins)])
+
         tau             = tau*fs_to_au
         self.k          = (kB_a*T) / (sigma*sigma) 
         self.mass       = kB_a * H_to_u * self.target_temp * (tau/(2*np.pi*sigma)) * (tau/(2*np.pi*sigma))
@@ -42,12 +44,12 @@ def eABF(self, ats, sigma = 2.0, tau = 10000.0):
         
         for i in range(len(xi)):
             extend_system(self, i, xi)
-        
+                
         self.traj       = np.array([xi])
         self.etraj      = np.array([self.ext_coords])
     
-    else:
 
+    else:
     	self.traj       = np.append(self.traj, [xi], axis = 0)
     	self.etraj      = np.append(self.etraj, [self.ext_coords], axis = 0)		
     
@@ -64,7 +66,7 @@ def eABF(self, ats, sigma = 2.0, tau = 10000.0):
     	elif len(ats) == 2:
     		bin0 = int(np.floor(abs(self.ext_coords[0]-self.minx[0])/self.dx[0]))
     		bin1 = int(np.floor(abs(self.ext_coords[1]-self.minx[1])/self.dx[1]))
-    		bink = bin0  + int(np.floor(np.abs(self.maxx[0]-self.minx[0])/self.dx[0]))*bin1
+    		bink = bin0  + self.binfactor*bin1
     	
     	self.bin_list[bink] += 1		
     	

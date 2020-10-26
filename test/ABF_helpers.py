@@ -148,6 +148,7 @@ def first_derivative_torsion(self, ats):
 
 	return delta_xi
 
+#--------------------------------------------------------------------------------------------------------
 def get_coord(self, ats):
 
     xi = np.array([])
@@ -159,7 +160,7 @@ def get_coord(self, ats):
             x = self.coords[0]
             xi = np.append(xi, x)
             delta_xi[i] += np.array([1,0])
-        
+
         elif ats[i][0] == 2:
             y = self.coords[1]
             xi = np.append(xi, y)
@@ -176,6 +177,15 @@ def get_coord(self, ats):
             y = self.coords[1]
             xi = np.append(xi, x/4.0 + y)
             delta_xi[i] += np.array([0.25,1])
+        
+        elif ats[i][0] == 5:
+            x = self.coords[0]
+            xi = np.append(xi, 1.0/x)
+            delta_xi[i] += np.array([-1.0/(x*x),0])
+        
+        else:
+            print("reaction coordinate not implemented!")
+            sys.exit(0)
 
     return (xi, delta_xi)
 
@@ -191,8 +201,6 @@ def extend_system(self, index, xi):
 	Returns:
 	  -
 	'''
-	random.seed(np.random.randint(2147483647))
-	
 	if index == 0:
 		self.ext_mass = np.array([])
 		self.ext_masses = np.array([])
@@ -201,7 +209,7 @@ def extend_system(self, index, xi):
 		self.ext_forces = np.array([]) 	
 		self.ext_natoms = 0 
 	
-	self.ext_mass = np.append(self.ext_mass, self.mass)
+	self.ext_mass   = np.append(self.ext_mass, self.mass)
 	self.ext_masses = np.append(self.ext_masses, self.mass)		
 	self.ext_coords = np.append(self.ext_coords, xi[index])
 	self.ext_forces = np.append(self.ext_forces, np.zeros(1)) 	
@@ -296,43 +304,43 @@ def write_traj(self, extended = False):
 
 # -----------------------------------------------------------------------------------------------------
 def write_output(self, ats):
-	'''write output of ABF or eABF calculations
-
-	Args:
-	  ats:	(array, atom indizes)
-
-	Returns:
-	  -
-	'''
-	if len(self.minx) == 1:
-		# 1D reaction coordinate
-		abf_out = open(f"abf_out.txt", "w")
-		abf_out.write("%6s\t%14s\t%14s\t%14s\t%14s\n" % ("Bin", "Xi", "Count", "Sum Forces", "Mean Force"))
-		for i in range(len(self.biases[0])):
-			abf_out.write("%6d\t%14.6f\t%14.6f\t%14.6f\t%14.6f\n" % (i, i*self.dx[0]+self.minx[0], self.bin_list[i], self.biases[0][i], self.biases[0][i]/self.bin_list[i] if self.bin_list[i] > 0 else 0))
-		abf_out.close()
-	
-	else:
-		# 2D reaction coordinate 
-		abf_out = open("abf_out.txt", "w")
-		abf_out.write("%6s\t%14s\t%14s\t%14s\t%14s\t%14s\t%14s\t%14s\n" % ("Bin","Xi1","Xi2","Count","Sum Forces1", "Sum Forces 2", "Mean Force 1","Mean Force 2"))
-		
-		Nbins0 = int(np.floor(np.abs(self.maxx[0]-self.minx[0])/self.dx[0]))
-		Nbins1 = int(np.floor(np.abs(self.maxx[1]-self.minx[1])/self.dx[1]))
-		
-		b = 0	
-		for i in range(Nbins0):
-
-			bin0 = i*ats[0][3]+ats[0][1]
-
-			for j in range(Nbins1):
-			
-				bin1 = j*ats[1][3]+ats[1][1]	
-				abf_out.write("%6d\t%14.6f\t%14.6f\t" % (b, bin0, bin1))
-				b += 1				
-				
-				bin_ij = i + Nbins0*j
-				abf_out.write("%14.6f\t%14.6f\t%14.6f\t%14.6f\t%14.6f\n" % (self.bin_list[bin_ij], self.biases[0][bin_ij], self.biases[1][bin_ij], self.biases[0][bin_ij]/self.bin_list[bin_ij] if self.bin_list[bin_ij] > 0 else 0, self.biases[1][bin_ij]/self.bin_list[bin_ij] if self.bin_list[bin_ij] > 0 else 0))			
-
-		abf_out.close()
-
+    '''write output of ABF or eABF calculations
+    
+    Args:
+      ats:	(array, atom indizes)
+    
+    Returns:
+      -
+    '''
+    if len(self.minx) == 1:
+        # 1D reaction coordinate
+        abf_out = open(f"abf_out.txt", "w")
+        abf_out.write("%6s\t%14s\t%14s\t%14s\t%14s\t%14s\n" % ("Bin", "Xi", "Count", "Sum Forces", "Mean Force", "Grad mean"))
+        for i in range(len(self.biases[0])):
+        	abf_out.write("%6d\t%14.6f\t%14.6f\t%14.6f\t%14.6f\t%14.6f\n" % (i, self.grid[i], self.bin_list[i], self.biases[0][i], self.biases[0][i]/self.bin_list[i] if self.bin_list[i] > 0 else 0, self.grad_mean[i]/self.bin_list[i] if self.bin_list[i] > 0 else 0))
+        abf_out.close()
+    
+    else:
+    	# 2D reaction coordinate 
+    	abf_out = open("abf_out.txt", "w")
+    	abf_out.write("%6s\t%14s\t%14s\t%14s\t%14s\t%14s\t%14s\t%14s\n" % ("Bin","Xi1","Xi2","Count","Sum Forces1", "Sum Forces 2", "Mean Force 1","Mean Force 2"))
+    	
+    	Nbins0 = int(np.floor(np.abs(self.maxx[0]-self.minx[0])/self.dx[0]))
+    	Nbins1 = int(np.floor(np.abs(self.maxx[1]-self.minx[1])/self.dx[1]))
+    	
+    	b = 0	
+    	for i in range(Nbins0):
+    
+    	    bin0 = i*ats[0][3]+ats[0][1]
+    
+    	    for j in range(Nbins1):
+    		
+                bin1 = j*ats[1][3]+ats[1][1]	
+                abf_out.write("%6d\t%14.6f\t%14.6f\t" % (b, bin0, bin1))
+                b += 1				
+    			
+                bin_ij = i + Nbins0*j
+                abf_out.write("%14.6f\t%14.6f\t%14.6f\t%14.6f\t%14.6f\n" % (self.bin_list[bin_ij], self.biases[0][bin_ij], self.biases[1][bin_ij], self.biases[0][bin_ij]/self.bin_list[bin_ij] if self.bin_list[bin_ij] > 0 else 0, self.biases[1][bin_ij]/self.bin_list[bin_ij] if self.bin_list[bin_ij] > 0 else 0))			
+    
+    	abf_out.close()
+    
