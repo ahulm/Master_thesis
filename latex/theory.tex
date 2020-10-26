@@ -14,8 +14,9 @@ Instead of dividing the reaction coordinate in several windows, with adaptive bi
 There are multiple adaptive biasing methods available, only differing in the choice of bias. Methods based on metadynamics (metaD) disfavor already visited states by accumulating repulsive potentials along the reaction coordinate (section \ref{sec:metaD}), while adaptive biasing force (ABF) methods compensate the mean force along the reaction coordinate to obtain uniform sampling (sections \ref{sec:ABF} and \ref{sec:eABF}). Meta-eABF combines both complementary approaches to speed up the convergence of the free energy estimate (section \ref{sec:meta-eABF}).
 
 In principle adaptive biasing methods only rely on the sampling of the canonical ensemble. One simple way to achieve this is using Langevin dynamics with sufficiently soft damping and small stochastic forces. A schematic procedure of adaptively biased Langevin dynamics is given in Algorithm \ref{alg:ABM}.
+
 \begin{algorithm}[H]
-  \caption{Velocity Verlet integrator for adaptively biased Langevin dynamics with atomic masses $\textbf{M}$, coordinates $\textbf{x}(t)$, momenta $\textbf{p}(t)$, potential $V(\textbf{x}(t))$ and forces $F(\textbf{x}(t))$, friction coefficient $\gamma$,}
+  \caption{Velocity Verlet integrator for adaptively biased Langevin dynamics with atomic masses $\textbf{M}$, coordinates $\textbf{x}(t)$, momenta $\textbf{p}(t)$, potential $V(\textbf{x}(t))$, forces $F(\textbf{x}(t))$ and friction coefficient $\gamma$,}
   \label{alg:ABM}
     \begin{algorithmic}
       \WHILE{$t < t_{end}$}
@@ -123,9 +124,9 @@ Sampling the extended system gives the following unbiased Boltzmann distribution
 which depends on the force constant $k$ or variance of the Gaussian kernel $\sigma^2=(\beta k)^{-1}$.
 The bias on $\lambda$ is the running average over the spring force in $\lambda$-bin k:
 \begin{equation}
-  \overline{F}(\lambda_{i}, k) = \frac{\delta A^{k}(\lambda_{i})}{\delta \lambda_i} = \frac{1}{N_{Step}^{k}} \sum_{\mu=1}^{N_{Step}^{k}} k(\lambda_{i,\mu}^{k}-\xi_{i,\mu}^{k})
+  \overline{F}(\lambda_{i}, k) = \frac{\partial A^{k}(\lambda_{i})}{\partial \lambda_i} = \frac{1}{N_{Step}^{k}} \sum_{\mu=1}^{N_{Step}^{k}} k(\lambda_{i,\mu}^{k}-\xi_{i,\mu}^{k})
 \end{equation}
-For small values of $N_{Step}^{k}$ the linear ramp function $R(N_{Step},k)$ given by equation \ref{eq:ramp} is used like in normal ABF. This generates the following biased Boltzmann distribution:
+For small values of $N_{Step}^{k}$ the linear ramp function $R(N_{Step},k)$ given by equation \ref{eq:ramp} is used. This generates the following biased Boltzmann distribution:
 \begin{equation}
   \tilde{\rho}(\lambda) \propto \int \exp \biggl[-\beta V(\textbf{x})-\frac{(\xi(\textbf{x})-\lambda)^2}{2\sigma^2} + A^{k}(\lambda) \biggr) \biggr] d\textbf{x}
 \end{equation}
@@ -138,7 +139,7 @@ For the tight coupling limit (high $k$, low $\sigma$) the unbiased distribution 
 
 An asymptotically unbiased estimator of the free energy can be derived by correcting the free energy gradient obtained from the eABF-biased distribution $\tilde{\rho}(z)$ with the average biasing force on z
 \begin{equation}
-  \frac{\delta A(z)}{\delta z_i} = -\beta^{-1}\frac{\delta \ln \tilde{\rho}(z)}{\delta z_i} + k(\braket{\lambda_i}_{z}-z_{i})
+  \frac{\partial A(z)}{\partial z_i} = -\beta^{-1}\frac{\partial \ln \tilde{\rho}(z)}{\partial z_i} + k(\braket{\lambda_i}_{z}-z_{i})
 \end{equation}
 which is called "Corrected z-averaged restraint" (CZAR) and can be calculated numerically from the time trajectory ($z_i$,$\lambda_i$) in an post-processing step.\autocite{lesage2017smoothed}
 

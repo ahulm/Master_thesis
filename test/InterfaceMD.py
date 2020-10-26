@@ -19,7 +19,7 @@ H_in_kJmol= 2625.499639
 kB_a    = kB / H_in_J       # Hartree / K
 
 class MD:
-  '''Class for 2D MD with different programs (e.g., PyFermiONs, xTB, ...)
+  '''Class for 2D MD with three test potentials 
   '''
 
   def __init__(self,mass_in=1,coords_in=[1,1],potential='1',dt_in=0.1e0,target_temp_in=298.15e0,seed_in=4911):

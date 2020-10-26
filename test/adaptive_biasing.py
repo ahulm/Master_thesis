@@ -19,11 +19,28 @@ it2fs       = 1.0327503e0       # fs per iteration
 fs2au       = 41.341374575751   # a.u. per fs
 
 class ABM:
-    '''Class for adaptive biasing methods to calculate Free Energies
-    '''
+    '''Class for adaptive biasing methods for 1D or 2D collective variables (CV)
+    
+    Init parameters:
+        MD:             MD object from InterfaceMD
 
-    def __init__(self, MD, ats, method='eABF', output_freq = 10000):
+        ats:            input parameters for different methods 
         
+        method:         'ABF': adaptive biasing force method, 2D only for othogonal CVs 
+                               ats = [[CV1, minx, maxx, dx, N_full],[CV2, ...]]
+
+                        'eABF': extended adaptive biasing force method, free energy obtained from CZAR estimator (Lesage et al. 2017)
+                                ats = [[CV1, minx, maxx, dx, N_full, sigma, tau],[CV2, ...]]
+                            
+                        'metaD': Well-Tempered Metadynmics
+                                 ats = [[CV1, minx, maxx, dx, Gaussian height, Gaussian variance, Update intervall, DeltaT for WT-metaD],[CV2,...]
+                    
+                        'meta-eABF': combination of metaD and eABF, free energy obtained from CZAR estimator (default)
+                    
+        output_frec:    Number of steps between outputs + frequency of free energy calculation (default: 10000)
+    '''
+    def __init__(self, MD, ats, method='eABF', output_freq = 10000):
+
         self.the_md     = MD   
         self.method     = method
         self.out_freq   = output_freq
@@ -79,7 +96,13 @@ class ABM:
 
     # -----------------------------------------------------------------------------------------------------
     def ABF(self):
-        
+        '''Adaptive biasing force method 
+
+        args:
+            -
+        returns:
+            - 
+        '''
         (xi, delta_xi, div_delta_xi) = self.__get_coord()
         self.traj = np.append(self.traj, [xi], axis = 0)
 
@@ -102,15 +125,20 @@ class ABM:
                 self.bias[i][bink] += np.dot(self.the_md.forces, v_i) + kB_a*self.the_md.target_temp*div_delta_xi
                 self.the_md.forces -= Rk * (self.bias[i][bink]/self.histogramm[bink]) * delta_xi[i]
 
-        # output
-        self.__write_traj()
+        # calculate free energy and write output
         if self.the_md.step%self.out_freq == 0:
-            self.F_from_ABF()
+            self.__F_from_ABF()
             self.__write_output()
 
     #------------------------------------------------------------------------------------------------------
     def eABF(self):
+        '''extended Adaptive Biasing Force method
 
+        args:
+            -
+        returns:
+            -
+        '''
         (xi, delta_xi, div_delta_xi) = self.__get_coord()
         
         self.__propagate_extended()
@@ -152,17 +180,22 @@ class ABM:
 
         self.__up_momenta_extended()
         
-        # output
-        self.__write_traj(extended = True)
+        # calculate free energy and write output
         if self.the_md.step%self.out_freq == 0:
-            self.F_from_ABF()
-            self.F_from_CZAR()
+            self.__F_from_ABF()
+            self.__F_from_CZAR()
             self.__write_output()
     
     
     #------------------------------------------------------------------------------------------------------
     def metaD(self, WT=True):
+        '''Metadynamics and Well-Tempered Metadynamics
 
+        input:
+            WT      (boolean, True)
+        returns:
+            -
+        '''
         (xi, delta_xi, div_delta_xi) = self.__get_coord()
         
         self.traj = np.append(self.traj, [xi], axis = 0)
@@ -195,14 +228,15 @@ class ABM:
                 # add bias force to system
                 self.the_md.forces += bias_force * delta_xi[i]
     
-        self.__write_traj()
+        # calculate free energy and write output
         if self.the_md.step%self.out_freq == 0:
-            self.F_from_metaD(WT=WT)
+            self.__F_from_metaD(WT=WT)
             self.__write_output()
 
     # -----------------------------------------------------------------------------------------------------
     def __get_coord(self):
-        
+        '''get CV
+        '''
         xi = np.array([])
         delta_xi = [0 for i in range(len(self.coord))]
         div_delta_xi = 0
@@ -245,6 +279,14 @@ class ABM:
 
     # -----------------------------------------------------------------------------------------------------
     def __get_bin(self, xi, extended = False):
+        '''get current bin of CV or extended variable
+        
+        Args:
+           xi                (bool, -)
+           extended          (bool, False)
+        Returns:
+           bink              
+        '''
         
         X = self.ext_coords if extended == True else xi
 
@@ -284,11 +326,12 @@ class ABM:
             self.ext_coords  += self.the_md.dt * self.ext_momenta / self.ext_mass
     
     # -----------------------------------------------------------------------------------------------------
-    def __up_momenta_extended(self, langevin=False, friction=1.0e-3):
+    def __up_momenta_extended(self, langevin=True, friction=1.0e-3):
         '''Update momenta of extended variables with Velocity Verlet
     
         Args:
-            -
+            langevin        (bool, True)
+            friction        (float, 1.0e-3)
         Returns:
             -    
         '''
@@ -302,8 +345,14 @@ class ABM:
             self.ext_momenta -= 0.5e0 * self.the_md.dt * self.ext_forces
     
     # -----------------------------------------------------------------------------------------------------
-    def get_mean(self):
-        
+    def __get_mean(self):
+        '''get mean of gradient and force, as well as geometic correction to obtain geometric free energy F^G
+
+        args:
+            -
+        returns:
+            -
+        '''
         self.mean_grad  = np.array([0.0 for i in range(self.nbins)])
         self.geom_corr  = np.array([0.0 for i in range(self.nbins)])
         self.mean_force = np.array([0.0 for i in range(self.nbins)])
@@ -315,12 +364,18 @@ class ABM:
                 self.mean_force[i] += self.bias[0][i]/self.histogramm[i]
             
     # -----------------------------------------------------------------------------------------------------
-    def F_from_ABF(self):
-        
+    def __F_from_ABF(self):
+        '''on-the-fly integration of ABF force to obtain free energy estimate of ABF or eABF/naive
+
+        args:
+            - 
+        returns:
+            - 
+        '''
         self.dF = np.array([0.0 for i in range(self.nbins)])
         if len(self.coord)==1:
             
-            self.get_mean() 
+            self.__get_mean() 
             for i in range(self.nbins):
                 self.dF[i] = np.sum(self.mean_force[0:i])*self.dx[0]
             self.dF -= self.dF.min()
@@ -330,8 +385,14 @@ class ABM:
             pass
     
     # -----------------------------------------------------------------------------------------------------
-    def F_from_metaD(self, WT=True):
-        
+    def __F_from_metaD(self, WT=True):
+        '''on-the-fly free energy estimate from metaD or WT-metaD bias potential
+
+        args:
+            -
+        returns:
+            - 
+        '''
         # save matadynamic bias potential on grid
         self.bias *= 0
         for dim in range(len(self.coord)):
@@ -344,30 +405,37 @@ class ABM:
                     dx = self.traj[j] - self.grid[i]
                     self.bias[dim][i] += self.height[dim] * WT_factor[dim] * np.exp(-0.5*np.sum(dx*dx)/self.variance[dim])
         
-        # F(z)
+        # get F(z)
         self.dF = -self.bias[0] 
         if WT==True:
             self.dF *= (self.the_md.target_temp * self.WT_dT)/self.WT_dT
         self.dF -= self.dF.min()
         
-        # F^G(z)
-        self.get_mean()
+        # get F^G(z)
+        self.__get_mean()
         self.dF_geom = self.dF - self.geom_corr
 
     
     # -----------------------------------------------------------------------------------------------------
-    def F_from_CZAR(self):
-        
-        traj = pd.DataFrame()
-        traj['z'] = self.traj[:,0]
-        traj['la'] = self.etraj[:,0]
+    def __F_from_CZAR(self):
+        '''on-the-fly CZAR free energy estimate for trajectory of CV and extended system for eABF
+           note that the outher 2 bins are cut off due to numeric integration
 
-        f = np.array([0.0 for i in range(self.nbins)])
-        bin_counts = np.array([0.0 for i in range(self.nbins)])
-        ln_z = np.array([0.0 for i in range(self.nbins)])
+        args:
+            -
+        returns:
+            - 
+        '''
+        traj        = pd.DataFrame()
+        traj['z']   = self.traj[:,0]
+        traj['la']  = self.etraj[:,0]
+
+        f           = np.array([0.0 for i in range(self.nbins)])
+        bin_counts  = np.array([0.0 for i in range(self.nbins)])
+        ln_z        = np.array([0.0 for i in range(self.nbins)])
         
-        # get histogramm in z and mean harmonic force per bin
-        for i in range(2,len(f)-2):
+        # get histogramm along CV z and mean harmonic force per bin
+        for i in range(0,len(f)):
             z = traj[traj.iloc[:,0].between(self.minx[0]+i*self.dx[0],self.minx[0]+i*self.dx[0]+self.dx[0])]
             bin_counts[i] = len(z)
             if bin_counts[i] > 0:
@@ -379,16 +447,16 @@ class ABM:
         for i in range(2,self.nbins-2):
             dln_z[i] += (-ln_z[i-2] + 8*ln_z[i-1] - 8*ln_z[i+1] + ln_z[i+2]) / (12.0*self.dx[0])
         
-        # F'(z) 
+        # get F'(z) 
         czar = kB_a * self.the_md.target_temp * dln_z + f
         
-        # integrate F'(z)
+        # integrate F'(z) to get F(z)
         self.dF_czar = np.array([0.0 for i in range(len(czar))])
         for i in range(self.nbins):
             self.dF_czar[i] += np.sum(czar[0:i])*self.dx[0]
         self.dF_czar -= self.dF_czar.min()
         
-        # F^G(z)
+        # get F^G(z)
         self.dF_czar_geom = self.dF_czar - self.geom_corr
 
     # -----------------------------------------------------------------------------------------------------
@@ -397,7 +465,6 @@ class ABM:
 
         Args:
             extended      (bool, False)
-        
         Returns:
             -
         '''
