@@ -39,11 +39,12 @@ class MD:
     
     if type(seed_in) is int:
       random.seed(seed_in)
+      print("THE RANDOM NUMBER SEED WAS: %i" % (seed_in))
     else:
       try:
         random.setstate(seed_in)
       except:
-        print("The provided seed was neither an int nor a state of random")
+        print("\tThe provided seed was neither an int nor a state of random")
         exit(1)
 
 

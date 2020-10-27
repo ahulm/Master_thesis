@@ -38,18 +38,26 @@ class ABM:
                         'meta-eABF': combination of metaD and eABF, free energy obtained from CZAR estimator (default)
                     
         output_frec:    Number of steps between outputs + frequency of free energy calculation (default: 10000)
-    '''
-    def __init__(self, MD, ats, method='eABF', output_freq = 10000):
+        
+        friction:       Use same friction coefficient for langevin dynamic extended system then for physical system
 
+        random_seed:    for methods involving langevin dynamics of extended system, give same seed than for MD of physical system 
+
+    Output:
+        bias_out.txt    txt file containing CV, histogramm, Bias, Standard Free Energy, Geometric Free Energy
+    '''
+    def __init__(self, MD, ats, method = 'eABF', output_freq = 10000, friction = 1.0e-3, random_seed = None):
+        
+        # general parameters
         self.the_md     = MD   
         self.method     = method
         self.out_freq   = output_freq
-        
+        self.friction   = friction   
+
         self.coord      = np.array([item[0] for item in ats])
         self.minx       = np.array([item[1] for item in ats])
         self.maxx       = np.array([item[2] for item in ats])
         self.dx         = np.array([item[3] for item in ats])
-        self.ramp_count = np.array([item[4] for item in ats])
         
         (xi, delta_xi, div_delta_xi) = self.__get_coord()
         self.traj       = np.array([xi])
@@ -61,39 +69,52 @@ class ABM:
         self.bias       = np.array(np.zeros((len(ats),self.nbins)), dtype=np.float64)
         self.sum_gradient = np.array(np.zeros(self.nbins), dtype=np.float64)
         self.grid       = np.array([self.minx+i*self.dx+self.dx/2 for i in range(self.nbins)])
+        
+        if method == 'ABF' or method == 'eABF':
+            # parameters special to ABF-like methods
 
-        if method == 'eABF':
+            self.ramp_count = np.array([item[4] for item in ats])
 
-            # setup extended system
-            sigma       = np.array([item[5] for item in ats])
-            tau         = np.array([item[6]*fs2au for item in ats])
-            
-            self.k      = (kB_a*self.the_md.target_temp) / (sigma*sigma)
-            self.ext_mass = kB_a * H2au * self.the_md.target_temp * (tau/(2*np.pi*sigma)) * (tau/(2*np.pi*sigma))
+            if method == 'eABF':
+                # setup extended system for eABF
+
+                sigma       = np.array([item[5] for item in ats])
+                tau         = np.array([item[6]*fs2au for item in ats])
                 
-            self.ext_coords     = np.copy(xi)
-            self.ext_natoms     = len(self.coord)
-            self.ext_forces     = np.array([0.0 for i in range(self.ext_natoms)])
-            self.ext_momenta    = np.array([0.0 for i in range(self.ext_natoms)])
-            
-            for i in range(self.ext_natoms):
-                self.ext_momenta[i] = random.gauss(0.0,1.0)*np.sqrt(self.the_md.target_temp*self.ext_mass[i])
-                TTT = (np.power(self.ext_momenta, 2)/self.ext_mass).sum()
-                TTT /= (self.ext_natoms)
-                self.ext_momenta *= np.sqrt(self.the_md.target_temp/(TTT*au2k))
+                self.k      = (kB_a*self.the_md.target_temp) / (sigma*sigma)
+                self.ext_mass = kB_a * H2au * self.the_md.target_temp * (tau/(2*np.pi*sigma)) * (tau/(2*np.pi*sigma))
+                    
+                self.ext_coords     = np.copy(xi)
+                self.ext_natoms     = len(self.coord)
+                self.ext_forces     = np.array([0.0 for i in range(self.ext_natoms)])
+                self.ext_momenta    = np.array([0.0 for i in range(self.ext_natoms)])
+        
+                # Random Number Generator
+                if type(random_seed) is int:
+                    random.seed(random_seed)
+                else:
+                    print("\n\tNo random seed was given to ABM so the system time is used!\n")
                 
-            self.etraj  = np.array([self.ext_coords])
-
-            print("  Spring constant for extended variable:\t%14.6f Hartree/radiant^2" % (self.k))
-            print("  fictitious mass for extended variable:\t%14.6f a.u.\n" % (self.ext_mass))
-       
+                for i in range(self.ext_natoms):
+                    # initialize extended system at target temp of MD simulation
+                    
+                    self.ext_momenta[i] = random.gauss(0.0,1.0)*np.sqrt(self.the_md.target_temp*self.ext_mass[i])
+                    TTT = (np.power(self.ext_momenta, 2)/self.ext_mass).sum()
+                    TTT /= (self.ext_natoms)
+                    self.ext_momenta *= np.sqrt(self.the_md.target_temp/(TTT*au2k))
+                    
+                self.etraj  = np.array([self.ext_coords])
+                
         elif method == 'metaD':
+            # parameters for metaD or WT-metaD
 
             self.height     = np.array([item[4]/H_to_kJmol for item in ats])
             self.variance   = np.array([item[5] for item in ats])
             self.update_int = np.array([item[6] for item in ats], dtype=np.int32)
             self.WT_dT      = np.array([item[7] for item in ats])
-
+        
+        self.print_parameters()
+    
     # -----------------------------------------------------------------------------------------------------
     def ABF(self):
         '''Adaptive biasing force method 
@@ -141,7 +162,7 @@ class ABM:
         '''
         (xi, delta_xi, div_delta_xi) = self.__get_coord()
         
-        self.__propagate_extended()
+        self.__propagate_extended(friction=self.friction)
 
         self.traj  = np.append(self.traj, [xi], axis = 0)
         self.etraj  = np.append(self.etraj, [self.ext_coords], axis = 0)
@@ -178,7 +199,7 @@ class ABM:
                 self.ext_forces[i]  = self.k * dxi
                 self.the_md.forces -= self.k * dxi * delta_xi[i]
 
-        self.__up_momenta_extended()
+        self.__up_momenta_extended(friction=self.friction)
         
         # calculate free energy and write output
         if self.the_md.step%self.out_freq == 0:
@@ -270,6 +291,12 @@ class ABM:
                 xi = np.append(xi, 1.0/x)
                 delta_xi[i] += np.array([-1.0/(x*x),0])
                 div_dela_xi = 2*xi[i]
+            
+            elif self.coord[i] == 6:
+                x = self.the_md.coords[0]
+                xi = np.append(xi, x*x)
+                delta_xi[i] += np.array([2*x,0])
+               # div_delta_xi = 2.0
 
             else:
                 print("reaction coordinate not implemented!")
@@ -287,7 +314,6 @@ class ABM:
         Returns:
            bink              
         '''
-        
         X = self.ext_coords if extended == True else xi
 
         if len(self.coord) == 1:
@@ -309,7 +335,6 @@ class ABM:
         Returns:
            -
         '''
-        
         if langevin==True:
             prefac    = 2.0 / (2.0 + friction*self.the_md.dt_fs)
             rand_push = np.sqrt(self.the_md.target_temp*friction*self.the_md.dt_fs*kB_a/2.0e0)
@@ -380,7 +405,7 @@ class ABM:
                 self.dF[i] = np.sum(self.mean_force[0:i])*self.dx[0]
             self.dF -= self.dF.min()
             self.dF_geom = self.dF - self.geom_corr
-
+            self.dF_geom -= self.dF_geom.min()
         else:
             pass
     
@@ -414,7 +439,7 @@ class ABM:
         # get F^G(z)
         self.__get_mean()
         self.dF_geom = self.dF - self.geom_corr
-
+        self.dF_geom -= self.dF_geom.min()
     
     # -----------------------------------------------------------------------------------------------------
     def __F_from_CZAR(self):
@@ -445,10 +470,10 @@ class ABM:
         # numeric derivative of ln(rho(z)) by five point stencil
         dln_z = np.array([0.0 for i in range(self.nbins)])
         for i in range(2,self.nbins-2):
-            dln_z[i] += (-ln_z[i-2] + 8*ln_z[i-1] - 8*ln_z[i+1] + ln_z[i+2]) / (12.0*self.dx[0])
+            dln_z[i] += (-ln_z[i+2] + 8*ln_z[i+1] - 8*ln_z[i-1] + ln_z[i-2]) / (12.0*self.dx[0])
         
         # get F'(z) 
-        czar = kB_a * self.the_md.target_temp * dln_z + f
+        czar = - kB_a * self.the_md.target_temp * dln_z + f
         
         # integrate F'(z) to get F(z)
         self.dF_czar = np.array([0.0 for i in range(len(czar))])
@@ -458,6 +483,7 @@ class ABM:
         
         # get F^G(z)
         self.dF_czar_geom = self.dF_czar - self.geom_corr
+        self.dF_czar_geom -= self.dF_czar_geom.min()
 
     # -----------------------------------------------------------------------------------------------------
     def __write_traj(self, extended = False):
@@ -521,5 +547,25 @@ class ABM:
             # 2D reaction coordinate
             pass
 
-
+    # -----------------------------------------------------------------------------------------------------
+    def print_parameters(self):
+        '''print parameters after init
+        '''
+        print("###############################################################################")
+        print("Initialize {m} method:\n".format(m=self.method))
+        for i in range(1,len(self.coord)+1):
+            print("\tMinimum Xi%d:\t\t\t\t%14.6f Bohr" % (i,self.minx[i-1]))
+            print("\tMaximum Xi%d:\t\t\t\t%14.6f Bohr" % (i,self.maxx[i-1]))
+            print("\tBinwidth Xi%d:\t\t\t\t%14.6f Bohr" % (i,self.dx[i-1]))
+            if self.method == 'ABF' or self.method == 'eABF':
+                print("\tN_full Xi%d:\t\t\t\t%14.6f steps" % (i,self.ramp_count[i-1]))
+                if self.method == 'eABF':
+                    print("\tSpring constant for extended variable:\t%14.6f Hartree/Bohr^2" % (self.k[i-1]))
+                    print("\tfictitious mass for extended variable:\t%14.6f a.u.\n" % (self.ext_mass[i-1]))
+            elif self.method == 'metaD':
+                print("\tGaussian height%d\t\t\t\t%14.6f Hartree" % (i,self.height[i-1]))
+                print("\tGaussian variance%d\t\t\t\t%14.6f Bohr" % (i,self.variance[i-1]))
+                print("\ttime intervall for update of bias:\t\t\t%d steps" % (self.update_int))
+                print("\tdT for WT-metaD:\t\t\t\t%14.6f K" % (self.WT_dT))
+        print("################################################################################\n")
 
