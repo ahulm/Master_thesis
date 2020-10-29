@@ -8,7 +8,6 @@ import time
 
 # Constants
 
-bohr2angs = 0.52917721092e0
 it2fs = 1.0327503e0
 au2k  = 315775.04e0
 au2bar = 2.9421912e8
@@ -107,15 +106,15 @@ class MD:
     x = self.coords[0]
     y = self.coords[1]
     
-    d = 20.0 / bohr2angs
-    e = 10.0 / bohr2angs
+    d = 40.0 
+    e = 20.0 
 
     if potential == '1':
       
       a = 1.4e-6 / H_in_kJmol 
       b = 0.5    / H_in_kJmol 
-      d = 40.0   / bohr2angs
-      e = 80.0   / bohr2angs
+      d = 80.0   
+      e = 160.0   
 
       s1 = (x-d)*(x-d)
       s2 = (x-e)*(x-e)
@@ -238,7 +237,7 @@ class MD:
     for i in range(len(ats)):
 
         coord = self.coords[ats[i][0]] 
-        coord0 = ats[i][1] / bohr2angs
+        coord0 = ats[i][1] 
         k = ats[i][2] / H_in_kJmol
         
         self.epot += 0.5 * k * np.power(coord-coord0,2.e0)
