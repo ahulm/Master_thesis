@@ -1,10 +1,8 @@
 import sys
+import time
 import numpy as np
 import pandas as pd
 import random
-
-# length units
-bohr2angs   = 0.52917721092e0
 
 # energy units
 kB          = 1.380648e-23      # J / K
@@ -46,7 +44,7 @@ class ABM:
     Output:
         bias_out.txt    txt file containing CV, histogramm, Bias, Standard Free Energy, Geometric Free Energy
     '''
-    def __init__(self, MD, ats, method = 'eABF', output_freq = 10000, friction = 1.0e-3, random_seed = None):
+    def __init__(self, MD, ats, method = 'meta-eABF', output_freq = 10000, friction = 1.0e-3, random_seed = None):
         
         # general parameters
         self.the_md     = MD   
@@ -70,13 +68,13 @@ class ABM:
         self.sum_gradient = np.array(np.zeros(self.nbins), dtype=np.float64)
         self.grid       = np.array([self.minx+i*self.dx+self.dx/2 for i in range(self.nbins)])
         
-        if method == 'ABF' or method == 'eABF':
+        if method == 'ABF' or method == 'eABF' or method == 'meta-eABF':
             # parameters special to ABF-like methods
 
             self.ramp_count = np.array([item[4] for item in ats])
 
-            if method == 'eABF':
-                # setup extended system for eABF
+            if method == 'eABF' or method == 'meta-eABF':
+                # setup extended system for eABF or meta-eABF
 
                 sigma       = np.array([item[5] for item in ats])
                 tau         = np.array([item[6]*fs2au for item in ats])
@@ -93,7 +91,7 @@ class ABM:
                 if type(random_seed) is int:
                     random.seed(random_seed)
                 else:
-                    print("\n\tNo random seed was given to ABM so the system time is used!\n")
+                    print("\nNo seed was given for the random number generator of ABM so the system time is used!\n")
                 
                 for i in range(self.ext_natoms):
                     # initialize extended system at target temp of MD simulation
@@ -105,14 +103,32 @@ class ABM:
                     
                 self.etraj  = np.array([self.ext_coords])
                 
+                if method == 'meta-eABF':
+                    # additional metadynamics parameters for meta-eABF
+                    
+                    self.abfforce   = np.array(np.zeros((len(ats),self.nbins)), dtype=np.float64)
+                    self.metaforce  = np.array(np.zeros((len(ats),self.nbins)), dtype=np.float64) 
+
+                    self.height     = np.array([item[7]/H_to_kJmol for item in ats])
+                    self.variance   = np.array([item[8] for item in ats])
+                    self.update_int = np.array([item[9] for item in ats], dtype=np.int32)
+                    self.WT_dT      = np.array([item[10] for item in ats])
+
         elif method == 'metaD':
             # parameters for metaD or WT-metaD
-
+            
+            self.metaforce  = np.array(np.zeros((len(ats),self.nbins)), dtype=np.float64) 
+            
             self.height     = np.array([item[4]/H_to_kJmol for item in ats])
             self.variance   = np.array([item[5] for item in ats])
             self.update_int = np.array([item[6] for item in ats], dtype=np.int32)
             self.WT_dT      = np.array([item[7] for item in ats])
-        
+
+        else:
+            print('\nAdaptive biasing method not implemented!')
+            print('Available choices: ABF, eABF, metaD or meta-eABF.')
+            sys.exit(1)
+            
         self.print_parameters()
     
     # -----------------------------------------------------------------------------------------------------
@@ -124,6 +140,8 @@ class ABM:
         returns:
             - 
         '''
+        start = time.perf_counter()
+
         (xi, delta_xi, div_delta_xi) = self.__get_coord()
         self.traj = np.append(self.traj, [xi], axis = 0)
 
@@ -145,7 +163,8 @@ class ABM:
                 # apply biase force
                 self.bias[i][bink] += np.dot(self.the_md.forces, v_i) + kB_a*self.the_md.target_temp*div_delta_xi
                 self.the_md.forces -= Rk * (self.bias[i][bink]/self.histogramm[bink]) * delta_xi[i]
-
+        
+        self.timing = time.perf_counter() - start
         # calculate free energy and write output
         if self.the_md.step%self.out_freq == 0:
             self.__F_from_ABF()
@@ -160,6 +179,8 @@ class ABM:
         returns:
             -
         '''
+        start = time.perf_counter()
+        
         (xi, delta_xi, div_delta_xi) = self.__get_coord()
         
         self.__propagate_extended(friction=self.friction)
@@ -201,6 +222,7 @@ class ABM:
 
         self.__up_momenta_extended(friction=self.friction)
         
+        self.timing = time.perf_counter() - start
         # calculate free energy and write output
         if self.the_md.step%self.out_freq == 0:
             self.__F_from_ABF()
@@ -209,7 +231,7 @@ class ABM:
     
     
     #------------------------------------------------------------------------------------------------------
-    def metaD(self, WT=True):
+    def metaD(self, WT=True, grid=True):
         '''Metadynamics and Well-Tempered Metadynamics
 
         input:
@@ -217,9 +239,9 @@ class ABM:
         returns:
             -
         '''
-        (xi, delta_xi, div_delta_xi) = self.__get_coord()
+        start = time.perf_counter()
         
-        self.traj = np.append(self.traj, [xi], axis = 0)
+        (xi, delta_xi, div_delta_xi) = self.__get_coord()
         
         if (xi <= self.maxx).all() and (xi >= self.minx).all():
             
@@ -227,32 +249,85 @@ class ABM:
             self.histogramm[bink] += 1
             
             for i in range(len(self.coord)):
-
-                bias_pot = 0
-                bias_force = 0
-                
-                # get bias force 
-                for j in range(0,len(self.traj),self.update_int[i]):
-                    
-                    dx = self.traj[j] - xi[i]
-                    bias_factor = self.height[i] * np.exp(-0.5*np.sum(dx*dx)/self.variance[i]) 
-                    
-                    if WT == True:
-                        bias_factor *= np.exp(-bias_pot/(kB_a*self.WT_dT))
-                     
-                    bias_pot    += bias_factor 
-                    bias_force  -= bias_factor * np.sum(dx)/self.variance[i]
                 
                 # for geometric correction of free energy
                 self.sum_gradient[bink] += np.linalg.norm(delta_xi[i]) 
 
-                # add bias force to system
-                self.the_md.forces += bias_force * delta_xi[i]
+                # apply bias force
+                bias_force = self.__calc_metaD_bias(xi,bink,WT=WT,grid=grid)
+                self.the_md.forces -= bias_force * delta_xi[i]
     
+        self.traj = np.append(self.traj, [xi], axis = 0)
+        
+        self.timing = time.perf_counter() - start
+        
         # calculate free energy and write output
         if self.the_md.step%self.out_freq == 0:
-            self.__F_from_metaD(WT=WT)
+            self.__F_from_metaD(WT=WT, grid=grid)
             self.__write_output()
+    
+    #------------------------------------------------------------------------------------------------------
+    def meta_eABF(self, WT = True, grid = True):
+        '''meta-eABF or WTM-eABF: combination of eABF with metadynamic
+
+        args:
+            WT          (bool, True)
+        returns:
+            -
+        '''
+        start = time.perf_counter()
+        
+        (xi, delta_xi, div_delta_xi) = self.__get_coord()
+        
+        self.__propagate_extended(friction=self.friction)
+
+        self.traj  = np.append(self.traj, [xi], axis = 0)
+        self.etraj  = np.append(self.etraj, [self.ext_coords], axis = 0)
+        
+        if (self.ext_coords <= self.maxx).all() and (self.ext_coords >= self.minx).all():
+
+            la_bin = self.__get_bin(xi, extended = True)
+            self.histogramm[la_bin] += 1
+
+            for i in range(len(self.coord)):
+                
+                # for geometric correction of free energy
+                self.sum_gradient[la_bin] += np.linalg.norm(delta_xi[i])
+                
+                # harmonic coupling of exteded coordinate to reaction coordinate 
+                dxi                 = self.ext_coords[i] - xi[i]
+                self.ext_forces[i]  = self.k * dxi
+                self.the_md.forces -= self.k * dxi * delta_xi[i]
+                
+                # eABF bias
+                Rk = 1.0 if self.histogramm[la_bin] > self.ramp_count[i] else self.histogramm[la_bin]/self.ramp_count[i]
+                self.abfforce[i][la_bin] += self.k * dxi
+                self.ext_forces -= Rk * self.abfforce[i][la_bin]/self.histogramm[la_bin]
+        
+                # metaD bias
+                metaforce = self.__calc_metaD_bias(self.ext_coords, la_bin, WT=WT, grid=grid)
+                self.ext_forces -= metaforce
+
+        else:
+            
+            for i in range(len(self.coord)):
+
+                # outside of bins only harmonic coupling without bias
+                dxi                 = self.ext_coords[i] - xi[i]
+                self.ext_forces[i]  = self.k * dxi
+                self.the_md.forces -= self.k * dxi * delta_xi[i]
+
+        self.__up_momenta_extended(friction=self.friction)
+        
+        self.__write_traj(extended = True)
+
+        self.timing = time.perf_counter() - start
+        # calculate free energy and write output
+        if self.the_md.step%self.out_freq == 0:
+            self.__F_from_ABF()
+            self.__F_from_CZAR()
+            self.__write_output()
+
 
     # -----------------------------------------------------------------------------------------------------
     def __get_coord(self):
@@ -295,8 +370,7 @@ class ABM:
             elif self.coord[i] == 6:
                 x = self.the_md.coords[0]
                 xi = np.append(xi, x*x)
-                delta_xi[i] += np.array([2*x,0])
-               # div_delta_xi = 2.0
+                delta_xi[i] += np.array([-2*x,0])
 
             else:
                 print("reaction coordinate not implemented!")
@@ -324,6 +398,54 @@ class ABM:
             bink = bin0 + self.bin_factor * bin1
         
         return bink
+
+    # -----------------------------------------------------------------------------------------------------
+    def __calc_metaD_bias(self, xi, bink, WT = True, grid = True):
+        '''get Bias Potential and Force as sum of Gaussian kernels
+
+        args:
+            xi              (float, CV)
+            bink            (int, Bin number of xi)
+            WT              (bool, Well-Tempered)
+            grid            (bool, use grid for force)
+        returns:
+            bias_force      (double, MetaD force on xi)
+        '''
+        if grid == True:
+            # update bias every update_int's step and save on grid -> O(1)
+            
+            if self.the_md.step%self.update_int[0] == 0:
+            
+                w = self.height[0] 
+                if WT == True:
+                    w *= np.exp(-self.bias[0][bink]/(kB_a*self.WT_dT))
+                
+                dx = self.grid - xi[0]
+                bias_factor = w * np.exp(-0.5*np.power(dx,2.0)/self.variance)
+                         
+                self.bias += bias_factor.T
+                self.metaforce += bias_factor.T * dx.T/self.variance
+            
+            bias_force = self.metaforce[0][bink]
+
+        else: 
+            # calculate exact bias every timestep -> O(t)
+            
+            bias_pot = 0
+            bias_force = 0
+            for j in range(0,len(self.traj),self.update_int[i]):
+                    
+                w = self.height[i]
+                if WT == True:
+                    w *= np.exp(-bias_pot/(kB_a*self.WT_dT))
+                    
+                dx = self.traj[j] - xi[i]
+                bias_factor = w * np.exp(-0.5*(dx*dx)/self.variance[i]) 
+                    
+                bias_pot    += bias_factor 
+                bias_force  += bias_factor * dx/self.variance[i]
+
+        return bias_force
 
     # -----------------------------------------------------------------------------------------------------
     def __propagate_extended(self, langevin=True, friction=1.0e-3):
@@ -410,33 +532,38 @@ class ABM:
             pass
     
     # -----------------------------------------------------------------------------------------------------
-    def __F_from_metaD(self, WT=True):
+    def __F_from_metaD(self, WT=True, grid = True):
         '''on-the-fly free energy estimate from metaD or WT-metaD bias potential
 
         args:
-            -
+            WT              (bool, Well-Tempered metaD)
+            grid            (bool, bias pot and force already saved on grid)
         returns:
             - 
         '''
-        # save matadynamic bias potential on grid
-        self.bias *= 0
-        for dim in range(len(self.coord)):
-            for j in range(0,len(self.traj),self.update_int[dim]):        
-                for i in range(self.nbins):
+        if grid == False:
+            # save matadynamic bias potential and force on grid
+            
+            self.bias *= 0
+            self.metaforce *= 0
+            for dim in range(len(self.coord)):
+                for j in range(0,len(self.traj),self.update_int[dim]):        
+                    for i in range(self.nbins):
                     
-                    if WT == True:
-                        WT_factor = np.exp(-self.bias[dim][i]/(kB_a*self.WT_dT))
+                        if WT == True:
+                            WT_factor = np.exp(-self.bias[dim][i]/(kB_a*self.WT_dT))
                      
-                    dx = self.traj[j] - self.grid[i]
-                    self.bias[dim][i] += self.height[dim] * WT_factor[dim] * np.exp(-0.5*np.sum(dx*dx)/self.variance[dim])
-        
-        # get F(z)
-        self.dF = -self.bias[0] 
+                        dx = self.traj[j] - self.grid[i]
+                        self.bias[dim][i] += self.height[dim] * WT_factor[dim] * np.exp(-0.5*np.sum(dx*dx)/self.variance[dim])
+                        self.metaforce[dim][i] -= self.height[dim] * WT_factor[dim] * np.exp(-0.5*np.sum(dx*dx)/self.variance[dim]) * np.sum(dx)/self.variance[dim]
+
+        # get standard free energie 
+        self.dF = - self.bias[0] 
         if WT==True:
-            self.dF *= (self.the_md.target_temp * self.WT_dT)/self.WT_dT
+            self.dF *= (self.the_md.target_temp + self.WT_dT)/self.WT_dT
         self.dF -= self.dF.min()
         
-        # get F^G(z)
+        # get geometric free energie 
         self.__get_mean()
         self.dF_geom = self.dF - self.geom_corr
         self.dF_geom -= self.dF_geom.min()
@@ -451,34 +578,32 @@ class ABM:
         returns:
             - 
         '''
-        traj        = pd.DataFrame()
-        traj['z']   = self.traj[:,0]
-        traj['la']  = self.etraj[:,0]
+        traj         = pd.DataFrame()
+        traj['z']    = self.traj[:,0]
+        traj['la']   = self.etraj[:,0]
 
-        f           = np.array([0.0 for i in range(self.nbins)])
-        bin_counts  = np.array([0.0 for i in range(self.nbins)])
-        ln_z        = np.array([0.0 for i in range(self.nbins)])
+        self.dF_czar = np.array([0.0 for i in range(len(czar))])
+        dFbar        = np.array([0.0 for i in range(self.nbins)])
+        ln_z         = np.array([0.0 for i in range(self.nbins)])
+        dln_z        = np.array([0.0 for i in range(self.nbins)])
         
-        # get histogramm along CV z and mean harmonic force per bin
-        for i in range(0,len(f)):
+        # get histogramm along CV and mean harmonic force per bin from trajectory
+        for i in range(0,self.nbins):
             z = traj[traj.iloc[:,0].between(self.minx[0]+i*self.dx[0],self.minx[0]+i*self.dx[0]+self.dx[0])]
-            bin_counts[i] = len(z)
-            if bin_counts[i] > 0:
-                f[i] += self.k * (np.mean(z.iloc[:,1]) - self.grid[i])
-                ln_z[i] = np.log(bin_counts[i])
+            if len(z) > 0:
+                ln_z[i] = np.log(len(z))
+                dFbar[i] += self.k * (np.mean(z.iloc[:,1]) - self.grid[i])
         
         # numeric derivative of ln(rho(z)) by five point stencil
-        dln_z = np.array([0.0 for i in range(self.nbins)])
         for i in range(2,self.nbins-2):
             dln_z[i] += (-ln_z[i+2] + 8*ln_z[i+1] - 8*ln_z[i-1] + ln_z[i-2]) / (12.0*self.dx[0])
         
         # get F'(z) 
-        czar = - kB_a * self.the_md.target_temp * dln_z + f
+        dFbar -= kB_a * self.the_md.target_temp * dln_z 
         
         # integrate F'(z) to get F(z)
-        self.dF_czar = np.array([0.0 for i in range(len(czar))])
-        for i in range(self.nbins):
-            self.dF_czar[i] += np.sum(czar[0:i])*self.dx[0]
+        for i in range(2,self.nbins-2):
+            self.dF_czar[i] += np.sum(dFbar[0:i])*self.dx[0]
         self.dF_czar -= self.dF_czar.min()
         
         # get F^G(z)
@@ -536,13 +661,22 @@ class ABM:
                 out.close()
             
             elif (self.method == 'metaD'):
-                head = ("Bin", "Xi", "Histogramm", "Mean Grad", "Bias Force", "dF", "dF geom")
-                out.write("%6s\t%14s\t%14s\t%14s\t%14s\t%14s\t%14s\n" % head)
+                head = ("Bin", "Xi", "Histogramm", "Mean Grad", "Bias Pot", "Bias Force", "dF", "dF geom")
+                out.write("%6s\t%14s\t%14s\t%14s\t%14s\t%14s\t%14s\t%14s\n" % head)
                 for i in range(len(self.bias[0])):
-                    row = (i, self.grid[i], self.histogramm[i], self.mean_grad[i], self.bias[0][i], self.dF[i], self.dF_geom[i])
-                    out.write("%6d\t%14.6f\t%14.6f\t%14.6f\t%14.6f\t%14.6f\t%14.6f\n" % row)
+                    row = (i, self.grid[i], self.histogramm[i], self.mean_grad[i], self.bias[0][i],self.metaforce[0][i], self.dF[i], self.dF_geom[i])
+                    out.write("%6d\t%14.6f\t%14.6f\t%14.6f\t%14.6f\t%14.6f\t%14.6f\t%14.6f\n" % row)
                 out.close()
-        
+            
+            elif (self.method == 'meta-eABF'):
+                head = ("Bin", "Xi", "Histogramm", "Mean Grad", "eABF bias", "MetaD bias", "dF", "dF geom", "dF/CZAR", "dF/CZAR geom")
+                out.write("%6s\t%14s\t%14s\t%14s\t%14s\t%14s\t%14s\t%14s\t%14s\t%14s\n" % head)
+                for i in range(len(self.bias[0])):
+                    row = (i, self.grid[i], self.histogramm[i], self.mean_grad[i], self.abfforce[0][i], self.metaforce[0][i],self.dF[i], self.dF_geom[i], self.dF_czar[i], self.dF_czar_geom[i])
+                    out.write("%6d\t%14.6f\t%14.6f\t%14.6f\t%14.6f\t%14.6f\t%14.6f\t%14.6f\t%14.6f\t%14.6f\n" % row)
+                out.close()
+
+
         else:
             # 2D reaction coordinate
             pass
@@ -557,15 +691,25 @@ class ABM:
             print("\tMinimum Xi%d:\t\t\t\t%14.6f Bohr" % (i,self.minx[i-1]))
             print("\tMaximum Xi%d:\t\t\t\t%14.6f Bohr" % (i,self.maxx[i-1]))
             print("\tBinwidth Xi%d:\t\t\t\t%14.6f Bohr" % (i,self.dx[i-1]))
-            if self.method == 'ABF' or self.method == 'eABF':
-                print("\tN_full Xi%d:\t\t\t\t%14.6f steps" % (i,self.ramp_count[i-1]))
-                if self.method == 'eABF':
+        print("\tNumber of bins:\t\t\t\t%14.6f\n" % (self.nbins))
+        
+        for i in range(1,len(self.coord)+1):
+            if self.method == 'ABF' or self.method == 'eABF' or self.method == 'meta-eABF':
+                print("\tN_full Xi%d:\t\t\t\t%14.6f steps\n" % (i,self.ramp_count[i-1]))
+                if self.method == 'eABF' or self.method == 'meta-eABF':
                     print("\tSpring constant for extended variable:\t%14.6f Hartree/Bohr^2" % (self.k[i-1]))
-                    print("\tfictitious mass for extended variable:\t%14.6f a.u.\n" % (self.ext_mass[i-1]))
-            elif self.method == 'metaD':
-                print("\tGaussian height%d\t\t\t\t%14.6f Hartree" % (i,self.height[i-1]))
-                print("\tGaussian variance%d\t\t\t\t%14.6f Bohr" % (i,self.variance[i-1]))
-                print("\ttime intervall for update of bias:\t\t\t%d steps" % (self.update_int))
-                print("\tdT for WT-metaD:\t\t\t\t%14.6f K" % (self.WT_dT))
+                    print("\tfictitious mass for extended variable:\t%14.6f a.u." % (self.ext_mass[i-1]))
+                    if self.method == 'meta-eABF':
+                        print("\n\tGaussian height%d:\t\t\t%14.6f Hartree" % (i,self.height[i-1]))
+                        print("\tGaussian variance%d:\t\t\t%14.6f Bohr" % (i,self.variance[i-1]))
+                        print("\ttime intervall for update of bias:\t%14.6f steps" % (self.update_int))
+                        print("\n\tdT for WT-metaD:\t\t\t%14.6f K" % (self.WT_dT))
+
+            if self.method == 'metaD':
+                print("\tGaussian height%d:\t\t\t%14.6f Hartree" % (i,self.height[i-1]))
+                print("\tGaussian variance%d:\t\t\t%14.6f Bohr" % (i,self.variance[i-1]))
+                print("\ttime intervall for update of bias:\t%14.6f steps" % (self.update_int))
+                print("\n\tdT for WT-metaD:\t\t\t%14.6f K" % (self.WT_dT))
         print("################################################################################\n")
+
 
