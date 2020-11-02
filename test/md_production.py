@@ -14,7 +14,7 @@ bohr2angs = 0.52917721092e0
 ################# Imput Section ####################
 # MD
 seed            = np.random.randint(2147483647) # upper boundary is simply largest signed int value 
-nsteps          = 100000    # number of MD steps
+nsteps          = 1    # number of MD steps
 dt              = 5.0e0     # fs
 target_temp     = 300.0     # K
 mass            = 10.0
@@ -23,16 +23,16 @@ coords          = [40.0,0.0]
 potential       = '3'
 
 # ABF
-#ats     = [[4,-50,50,1,100]]
+ats     = [[1,-50,50,2,100],[2,-40,40,2,100]]
 
 # eABF
-ats     = [[4,-50.0,50.0,2.0,100,3.0,100000]]
+#ats     = [[1,-50.0,50.0,2.0,100,3.0,100000],[2,-30.0,30.0,2.0,100,3.0,100000]]
 
 # metadynamics
-#ats = [[1,-50,50,2,0.1,2.0,20,2000.0],[2,-30,30,2,0.1,2.0,20,2000.0]]
+#ats = [[4,-50,50,2,0.1,3.0,20,2000.0]]#,[2,-30,30,2,0.1,2.0,20,2000.0]]
 
 # meta-eABF
-#ats      = [[4,-50.0,50.0,2.0,100,3.0,100000,0.1,2.0,20,1000]]
+#ats      = [[4,-50.0,50.0,2.0,100,3.0,100000,0.1,2.0,20,2000]]
 
 # US
 #ats = [[1,0.0,1000.0]]
@@ -44,11 +44,11 @@ step_count = 0
 
 the_md = MD(mass_in=mass,coords_in=coords,potential=potential,dt_in=dt,target_temp_in=target_temp,seed_in=seed)
 
-the_bias = ABM(the_md, ats, method = 'eABF', output_freq = 1000, random_seed = seed)
+the_bias = ABM(the_md, ats, method = 'ABF', output_freq = 1000, random_seed = seed)
 
 the_md.calc_init()
 
-the_bias.eABF()
+the_bias.ABF()
 
 the_md.calc_etvp()
 
@@ -63,7 +63,7 @@ while step_count < nsteps:
     the_md.propagate(langevin=True, friction=friction)
     the_md.calc()
     
-    the_bias.eABF()
+    the_bias.ABF()
     
     the_md.up_momenta(langevin=True, friction=friction)
     the_md.calc_etvp()

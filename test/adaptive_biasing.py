@@ -6,7 +6,7 @@ import random
 
 # energy units
 kB          = 1.380648e-23      # J / K
-H_to_kJmol  = 2625.499639
+H_to_kJmol  = 2625.499639       #
 H_to_J      = 4.359744e-18      #
 kB_a        = kB / H_to_J       # Hartree / K
 H2au        = 2.921264912428e-8 # Hartree to aromic mass unit
@@ -26,7 +26,6 @@ class ABM:
                         ats = [[CV1, minx, maxx, dx, N_full],[CV2, ...]]
 
                         N_full:     Sampels per bin when full bias is applied, if N_bin < N_full: Bias = 1/N_bin * F_bias
-                                    save choice: N_full >= 200
 
         metaD           Metadynamics or Well-Tempered metadynamics for 1D or 2D CV's
                         Free energy estimated from biasing potential: dF= -(T+deltaT)/deltaT * V_bias
@@ -93,7 +92,7 @@ class ABM:
         self.bias         = np.array(np.zeros((self.nbins_per_dim[1],self.nbins_per_dim[0])), dtype=np.float64)
         self.histogramm   = np.array(np.zeros((self.nbins_per_dim[1],self.nbins_per_dim[0])), dtype=np.int32)
         self.sum_gradient = np.array(np.zeros((self.nbins_per_dim[1],self.nbins_per_dim[0])), dtype=np.float64)
-
+        print(self.bias)
         if method == 'ABF' or method == 'eABF' or method == 'meta-eABF':
             # parameters special to ABF-like methods
 
@@ -220,12 +219,11 @@ class ABM:
         if (xi <= self.maxx).all() and (xi >= self.minx).all():
 
             bink = self.__get_bin(xi)
-            self.histogramm[bink] += 1
 
             for i in range(len(self.coord)):
 
-                # for geometric correction of free energy
-                self.sum_gradient[bink] += np.linalg.norm(delta_xi[i])
+                self.histogramm[i, bink[i]] += 1
+                self.sum_gradient[i,bink[i]] += np.linalg.norm(delta_xi[i])
 
                 # apply bias force
                 bias_force = self.__calc_metaD_bias(xi,bink,WT=WT,grid=grid)
@@ -242,6 +240,7 @@ class ABM:
             # calculate free energy and write output
             self.__F_from_metaD(WT=WT, grid=grid)
             self.__write_output()
+            self.__write_conv()
 
     #------------------------------------------------------------------------------------------------------
     def eABF(self, write_traj = True):
@@ -265,20 +264,15 @@ class ABM:
             for i in range(len(self.coord)):
 
                 self.histogramm[i,la_bin[i]] += 1
+                self.sum_gradient[i,la_bin[i]] += np.linalg.norm(delta_xi[i])
 
                 # harmonic coupling of exteded coordinate to reaction coordinate
                 dxi                 = self.ext_coords[i] - xi[i]
                 self.ext_forces[i]  = self.k * dxi
                 self.the_md.forces -= self.k * dxi * delta_xi[i]
 
-                # for geometric correction of free energy
-                self.sum_gradient[i,la_bin[i]] += np.linalg.norm(delta_xi[i])
-
-                print()
-                # ramp function R(N,k)
-                Rk = 1.0 if self.histogramm[i,la_bin[i]] > self.ramp_count[i] else self.histogramm[i,la_bin[i]]/self.ramp_count[i]
-
                 # apply biase force
+                Rk = 1.0 if self.histogramm[i,la_bin[i]] > self.ramp_count[i] else self.histogramm[i,la_bin[i]]/self.ramp_count[i]
                 self.bias[i,la_bin[i]] += self.k * dxi
                 self.ext_forces        -= Rk * self.bias[i,la_bin[i]]/self.histogramm[i,la_bin[i]]
 
@@ -334,8 +328,6 @@ class ABM:
             for i in range(len(self.coord)):
 
                 self.histogramm[i,la_bin[i]] += 1
-
-                # for geometric correction of free energy
                 self.sum_gradient[i,la_bin[i]] += np.linalg.norm(delta_xi[i])
 
                 # harmonic coupling of exteded coordinate to reaction coordinate
@@ -343,14 +335,14 @@ class ABM:
                 self.ext_forces[i]  = self.k * dxi
                 self.the_md.forces -= self.k * dxi * delta_xi[i]
 
+                # metaD bias
+                metaforce = self.__calc_metaD_bias(self.ext_coords, la_bin, WT=WT, grid=grid)
+                self.ext_forces -= metaforce
+
                 # eABF bias
                 Rk = 1.0 if self.histogramm[i,la_bin[i]] > self.ramp_count[i] else self.histogramm[i,la_bin[i]]/self.ramp_count[i]
                 self.abfforce[i,la_bin[i]] += self.k * dxi
                 self.ext_forces -= Rk * self.abfforce[i,la_bin[i]]/self.histogramm[i,la_bin[i]]
-
-                # metaD bias
-                metaforce = self.__calc_metaD_bias(self.ext_coords, la_bin[i], WT=WT, grid=grid)
-                self.ext_forces -= metaforce
 
         else:
 
@@ -473,15 +465,15 @@ class ABM:
 
                 w = self.height[0]
                 if WT == True:
-                    w *= np.exp(-self.bias[0][bink]/(kB_a*self.WT_dT))
+                    w *= np.exp(-self.bias[0,bink[0]]/(kB_a*self.WT_dT[0]))
 
                 dx = self.grid - xi[0]
-                bias_factor = w * np.exp(-0.5*np.power(dx,2.0)/self.variance)
+                bias_factor = w * np.exp(-0.5*np.power(dx[0],2.0)/self.variance[0])
 
                 self.bias += bias_factor.T
-                self.metaforce += bias_factor.T * dx.T/self.variance
+                self.metaforce += bias_factor.T * dx[0].T/self.variance[0]
 
-            bias_force = self.metaforce[0][bink]
+            bias_force = self.metaforce[0,bink[0]]
 
         else:
             # calculate exact bias every timestep
@@ -558,7 +550,7 @@ class ABM:
         '''
         self.mean_force = np.array(np.zeros((self.nbins_per_dim[1],self.nbins_per_dim[0])), dtype=np.float64)
         for dim in range(len(self.coord)):
-            for i in range(self.nbins):
+            for i in range(self.nbins_per_dim[dim]):
                 if self.histogramm[dim,i] > 0:
                     self.mean_force[dim,i] += self.bias[dim,i]/self.histogramm[dim,i]
 
@@ -571,17 +563,14 @@ class ABM:
         returns:
             -
         '''
-        self.dF = np.array([0.0 for i in range(self.nbins)])
-        if len(self.coord)==1:
+        self.dF = np.array(np.zeros((self.nbins_per_dim[1],self.nbins_per_dim[0])), dtype=np.float64)
 
-            self.__get_mean()
-            for i in range(self.nbins):
-                self.dF[i] = np.sum(self.mean_force[0:i])*self.dx[0]
-            self.dF -= self.dF.min()
-            self.dF_geom = self.__F_geom_from_F(self.dF)
-
-        else:
-            pass
+        self.__get_mean()
+        for dim in range(len(self.coord)):
+            for i in range(self.nbins_per_dim[dim]):
+                self.dF[dim,i] = np.sum(self.mean_force[dim,0:i])*self.dx[dim]
+        self.dF -= self.dF.min()
+        self.dF_geom = self.__F_geom_from_F(self.dF)
 
     # -----------------------------------------------------------------------------------------------------
     def __F_from_metaD(self, WT=True, grid = True):
@@ -670,7 +659,7 @@ class ABM:
         self.mean_grad = np.array(np.zeros((self.nbins_per_dim[1],self.nbins_per_dim[0])), dtype=np.float64)
         geom_corr      = np.array(np.zeros((self.nbins_per_dim[1],self.nbins_per_dim[0])), dtype=np.float64)
         for dim in range(len(self.coord)):
-            for i in range(self.nbins):
+            for i in range(self.nbins_per_dim[dim]):
                 if self.histogramm[dim,i] > 0:
                     self.mean_grad[dim,i] = self.sum_gradient[dim,i]/self.histogramm[dim,i]
                     geom_corr[dim,i] = kB_a * self.the_md.target_temp * np.log(self.mean_grad[dim,i])
@@ -724,10 +713,23 @@ class ABM:
                     conv_out.write("%14s\t" % (f"Bin{i}"))
             conv_out.close()
 
+        if self.method == 'metaD':
+            mean_force = -self.metaforce
+
+        elif self.method == 'meta-eABF':
+            mean_force = np.copy(self.metaforce)
+            for i in range(self.nbins):
+                if self.histogramm[0,i] > 0:
+                    mean_force[0,i] += self.abfforce[0,i]/self.histogramm[0,i]
+
+        else:
+            mean_force = self.mean_force
+
         conv_out = open("bias_conv.dat", "a")
         conv_out.write("\n%14.6f\t" % (self.the_md.step*self.the_md.dt*it2fs))
-        for i in range(self.nbins):
-            conv_out.write("%14.6f\t" % (self.mean_force[0][i]))
+        for dim in range(len(self.coord)):
+            for i in range(self.nbins_per_dim[dim]):
+                conv_out.write("%14.6f\t" % (mean_force[dim,i]))
         conv_out.close()
 
     # -----------------------------------------------------------------------------------------------------
@@ -741,7 +743,7 @@ class ABM:
                 head = ("Bin", "Xi", "Histogramm", "Mean Grad", "Mean Force", "dF", "dF geom")
                 out.write("%6s\t%14s\t%14s\t%14s\t%14s\t%14s\t%14s\n" % head)
                 for i in range(len(self.bias[0])):
-                    row = (i, self.grid[0][i], self.histogramm[0,i], self.mean_grad[0,i], self.mean_force[0,i], self.dF[i], self.dF_geom[i])
+                    row = (i, self.grid[0][i], self.histogramm[0,i], self.mean_grad[0,i], self.mean_force[0,i], self.dF[i], self.dF_geom[0,i])
                     out.write("%6d\t%14.6f\t%14.6f\t%14.6f\t%14.6f\t%14.6f\t%14.6f\n" % row)
                 out.close()
 
@@ -757,16 +759,16 @@ class ABM:
                 head = ("Bin", "Xi", "Histogramm", "Mean Grad", "Bias Pot", "Bias Force", "dF", "dF geom")
                 out.write("%6s\t%14s\t%14s\t%14s\t%14s\t%14s\t%14s\t%14s\n" % head)
                 for i in range(len(self.bias[0])):
-                    row = (i, self.grid[i], self.histogramm[i], self.mean_grad[i], self.bias[0][i],self.metaforce[0][i], self.dF[i], self.dF_geom[i])
+                    row = (i, self.grid[0][i], self.histogramm[0,i], self.mean_grad[0,i], self.bias[0,i],self.metaforce[0,i], self.dF[i], self.dF_geom[0,i])
                     out.write("%6d\t%14.6f\t%14.6f\t%14.6f\t%14.6f\t%14.6f\t%14.6f\t%14.6f\n" % row)
                 out.close()
 
             elif (self.method == 'meta-eABF'):
-                head = ("Bin", "Xi", "Histogramm", "Mean Grad", "eABF bias", "MetaD bias", "dF", "dF geom", "dF/CZAR", "dF/CZAR geom")
-                out.write("%6s\t%14s\t%14s\t%14s\t%14s\t%14s\t%14s\t%14s\t%14s\t%14s\n" % head)
+                head = ("Bin", "Xi", "Histogramm", "Mean Grad", "eABF bias", "MetaD bias", "dF/CZAR", "dF/CZAR geom")
+                out.write("%6s\t%14s\t%14s\t%14s\t%14s\t%14s\t%14s\t%14s\n" % head)
                 for i in range(len(self.bias[0])):
-                    row = (i, self.grid[i], self.histogramm[i], self.mean_grad[i], self.abfforce[0][i], self.metaforce[0][i],self.dF_czar[i], self.dF_czar_geom[i])
-                    out.write("%6d\t%14.6f\t%14.6f\t%14.6f\t%14.6f\t%14.6f\t%14.6f\t%14.6f\t%14.6f\t%14.6f\n" % row)
+                    row = (i, self.grid[0][i], self.histogramm[0,i], self.mean_grad[0,i], self.abfforce[0,i], self.metaforce[0,i],self.dF_czar[i], self.dF_czar_geom[0,i])
+                    out.write("%6d\t%14.6f\t%14.6f\t%14.6f\t%14.6f\t%14.6f\t%14.6f\t%14.6f\n" % row)
                 out.close()
 
 
