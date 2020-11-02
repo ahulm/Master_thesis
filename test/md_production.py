@@ -14,7 +14,7 @@ bohr2angs = 0.52917721092e0
 ################# Imput Section ####################
 # MD
 seed            = np.random.randint(2147483647) # upper boundary is simply largest signed int value 
-nsteps          = 1    # number of MD steps
+nsteps          = 10000000    # number of MD steps
 dt              = 5.0e0     # fs
 target_temp     = 300.0     # K
 mass            = 10.0
@@ -23,7 +23,7 @@ coords          = [40.0,0.0]
 potential       = '3'
 
 # ABF
-ats     = [[1,-50,50,2,100],[2,-40,40,2,100]]
+ats     = [[1,-50,50,5,100],[2,-40,40,5,100]]
 
 # eABF
 #ats     = [[1,-50.0,50.0,2.0,100,3.0,100000],[2,-30.0,30.0,2.0,100,3.0,100000]]
@@ -44,7 +44,7 @@ step_count = 0
 
 the_md = MD(mass_in=mass,coords_in=coords,potential=potential,dt_in=dt,target_temp_in=target_temp,seed_in=seed)
 
-the_bias = ABM(the_md, ats, method = 'ABF', output_freq = 1000, random_seed = seed)
+the_bias = ABM(the_md, ats, method = 'ABF', output_freq = 10000, random_seed = seed)
 
 the_md.calc_init()
 

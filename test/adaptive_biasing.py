@@ -3,6 +3,7 @@ import time
 import numpy as np
 import pandas as pd
 import random
+import scipy.integrate as spi
 
 # energy units
 kB          = 1.380648e-23      # J / K
@@ -84,15 +85,16 @@ class ABM:
 
         # get number of bins
         self.nbins_per_dim = np.array([1,1])
+        self.grid          = []
         for i in range(len(self.coord)):
             self.nbins_per_dim[i] = int(np.ceil(np.abs(self.maxx[i]-self.minx[i])/self.dx[i])) if self.dx[i] > 0 else 1
+            self.grid.append(np.linspace(self.minx[i],self.maxx[i],self.nbins_per_dim[i]+1))
         self.nbins = np.prod(self.nbins_per_dim)
 
-        self.grid         = [np.linspace(self.minx[0],self.maxx[0],self.nbins_per_dim[0])]
         self.bias         = np.array(np.zeros((self.nbins_per_dim[1],self.nbins_per_dim[0])), dtype=np.float64)
         self.histogramm   = np.array(np.zeros((self.nbins_per_dim[1],self.nbins_per_dim[0])), dtype=np.int32)
         self.sum_gradient = np.array(np.zeros((self.nbins_per_dim[1],self.nbins_per_dim[0])), dtype=np.float64)
-        print(self.bias)
+
         if method == 'ABF' or method == 'eABF' or method == 'meta-eABF':
             # parameters special to ABF-like methods
 
@@ -176,19 +178,19 @@ class ABM:
 
             for i in range(len(self.coord)):
 
-                self.histogramm[i,bink[i]] += 1
+                self.histogramm[bink[1],bink[0]] += 1
 
                 # ramp function R(N,k)
-                Rk = 1.0 if self.histogramm[i,bink[i]] > self.ramp_count[i] else self.histogramm[i,bink[i]]/self.ramp_count[i]
+                Rk = 1.0 if self.histogramm[bink[1],bink[0]] > self.ramp_count[i] else self.histogramm[bink[1],bink[0]]/self.ramp_count[i]
 
                 # inverse gradient v_i
                 delta_xi_n = np.linalg.norm(delta_xi[i])
                 v_i = delta_xi[i]/(delta_xi_n*delta_xi_n)
-                self.sum_gradient[i,bink[i]] += delta_xi_n
+                self.sum_gradient[bink[1],bink[0]] += delta_xi_n
 
                 # apply biase force
-                self.bias[i,bink[i]] += np.dot(self.the_md.forces, v_i) + kB_a*self.the_md.target_temp*div_delta_xi[i]
-                self.the_md.forces -= Rk * (self.bias[i,bink[i]]/self.histogramm[i,bink[i]]) * delta_xi[i]
+                self.bias[bink[1],bink[0]] += np.dot(self.the_md.forces, v_i) + kB_a*self.the_md.target_temp*div_delta_xi[i]
+                self.the_md.forces -= Rk * (self.bias[bink[1],bink[0]]/self.histogramm[bink[1],bink[0]]) * delta_xi[i]
 
         self.timing = time.perf_counter() - start
 
@@ -429,21 +431,10 @@ class ABM:
            xi               (array, -)
            extended         (bool, False)
         returns:
-           bink             (array, [bin0, bin1, bink])
+           bink             (array, [bin0, bin1])
         '''
         X = self.ext_coords if extended == True else xi
-
-        bink = [0 for i in range(3)]
-
-        if len(self.coord) == 1:
-            bink[0] = int(np.floor(abs(X[0]-self.minx[0])/self.dx[0]))
-            bink[1] = 0
-            bink[2] = int(np.floor(abs(X[0]-self.minx[0])/self.dx[0]))
-        else:
-            bink[0] = int(np.floor(abs(X[0]-self.minx[0])/self.dx[0]))
-            bink[1] = int(np.floor(abs(X[1]-self.minx[1])/self.dx[1]))
-            bink[2] = bink[0] + self.nbins_per_dim[0] * bink[1]
-
+        bink = np.array(np.floor(np.abs(X-self.minx)/self.dx),dtype=np.int32)
         return bink
 
     # -----------------------------------------------------------------------------------------------------
@@ -549,10 +540,10 @@ class ABM:
             -
         '''
         self.mean_force = np.array(np.zeros((self.nbins_per_dim[1],self.nbins_per_dim[0])), dtype=np.float64)
-        for dim in range(len(self.coord)):
-            for i in range(self.nbins_per_dim[dim]):
-                if self.histogramm[dim,i] > 0:
-                    self.mean_force[dim,i] += self.bias[dim,i]/self.histogramm[dim,i]
+        for i in range(self.nbins_per_dim[1]):
+            for j in range(self.nbins_per_dim[0]):
+                if self.histogramm[i,j] > 0:
+                    self.mean_force[i,j] += self.bias[i,j]/self.histogramm[i,j]
 
     # -----------------------------------------------------------------------------------------------------
     def __F_from_ABF(self):
@@ -564,12 +555,22 @@ class ABM:
             -
         '''
         self.dF = np.array(np.zeros((self.nbins_per_dim[1],self.nbins_per_dim[0])), dtype=np.float64)
-
         self.__get_mean()
-        for dim in range(len(self.coord)):
-            for i in range(self.nbins_per_dim[dim]):
-                self.dF[dim,i] = np.sum(self.mean_force[dim,0:i])*self.dx[dim]
-        self.dF -= self.dF.min()
+
+        if len(self.coord) == 1:
+            # numeric integration with Simpson rule
+
+            for i in range(1,self.nbins_per_dim[0]-1):
+                self.dF[0,i] = spi.simps(self.mean_force[0:i,0],self.grid[0][0:i])
+            self.dF -= self.dF.min()
+
+        if len(self.coord) == 2:
+            # use Simpson rule twice
+
+            for i in range(1,self.nbins_per_dim[1]-1):
+                for j in range(1,self.nbins_per_dim[0]-1):
+                    self.dF[i,j] = spi.simps(spi.simps(self.mean_force[0:i,0:j],self.grid[0][0:j]),self.grid[1][0:i])
+            self.dF -= self.dF.min()
         self.dF_geom = self.__F_geom_from_F(self.dF)
 
     # -----------------------------------------------------------------------------------------------------
@@ -736,45 +737,40 @@ class ABM:
     def __write_output(self):
         '''write output of free energy calculations
         '''
-        if len(self.coord) == 1:
+        out = open(f"bias_out.dat", "w")
+        if (self.method == 'ABF'):
+            head = ("Xi1", "Xi0", "Histogramm", "Mean Grad", "Mean Force", "dF", "dF geom")
+            out.write("%14s\t%14s\t%14s\t%14s\t%14s\t%14s\t%14s\n" % head)
+            for i in range(self.nbins_per_dim[0]):
+                for j in range(self.nbins_per_dim[1]):
+                    row = (self.grid[1][j], self.grid[0][i], self.histogramm[j,i], self.mean_grad[j,i], self.mean_force[j,i], self.dF[j,i], self.dF_geom[j,i])
+                    out.write("%14.6f\t%14.6f\t%14.6f\t%14.6f\t%14.6f\t%14.6f\t%14.6f\n" % row)
+            out.close()
+        '''
+                elif (self.method == 'eABF'):
+                    head = ("Bin", "Xi", "Hist (la)", "Mean Grad", "Mean Force", "dF/naive", "dF/naive geom", "dF/CZAR", "dF/CZAR geom")
+                    out.write("%6s\t%14s\t%14s\t%14s\t%14s\t%14s\t%14s\t%14s\t%14s\n" % head)
+                    for i in range(len(self.bias[0])):
+                        row = (i, self.grid[0][i], self.histogramm[0,i], self.mean_grad[0,i], self.mean_force[0,i], self.dF[i], self.dF_geom[0,i], self.dF_czar[i], self.dF_czar_geom[0,i])
+                        out.write("%6d\t%14.6f\t%14.6f\t%14.6f\t%14.6f\t%14.6f\t%14.6f\t%14.6f\t%14.6f\n" % row)
+                    out.close()
 
-            out = open(f"bias_out.dat", "w")
-            if (self.method == 'ABF'):
-                head = ("Bin", "Xi", "Histogramm", "Mean Grad", "Mean Force", "dF", "dF geom")
-                out.write("%6s\t%14s\t%14s\t%14s\t%14s\t%14s\t%14s\n" % head)
-                for i in range(len(self.bias[0])):
-                    row = (i, self.grid[0][i], self.histogramm[0,i], self.mean_grad[0,i], self.mean_force[0,i], self.dF[i], self.dF_geom[0,i])
-                    out.write("%6d\t%14.6f\t%14.6f\t%14.6f\t%14.6f\t%14.6f\t%14.6f\n" % row)
-                out.close()
+                elif (self.method == 'metaD'):
+                    head = ("Bin", "Xi", "Histogramm", "Mean Grad", "Bias Pot", "Bias Force", "dF", "dF geom")
+                    out.write("%6s\t%14s\t%14s\t%14s\t%14s\t%14s\t%14s\t%14s\n" % head)
+                    for i in range(len(self.bias[0])):
+                        row = (i, self.grid[0][i], self.histogramm[0,i], self.mean_grad[0,i], self.bias[0,i],self.metaforce[0,i], self.dF[i], self.dF_geom[0,i])
+                        out.write("%6d\t%14.6f\t%14.6f\t%14.6f\t%14.6f\t%14.6f\t%14.6f\t%14.6f\n" % row)
+                    out.close()
 
-            elif (self.method == 'eABF'):
-                head = ("Bin", "Xi", "Hist (la)", "Mean Grad", "Mean Force", "dF/naive", "dF/naive geom", "dF/CZAR", "dF/CZAR geom")
-                out.write("%6s\t%14s\t%14s\t%14s\t%14s\t%14s\t%14s\t%14s\t%14s\n" % head)
-                for i in range(len(self.bias[0])):
-                    row = (i, self.grid[0][i], self.histogramm[0,i], self.mean_grad[0,i], self.mean_force[0,i], self.dF[i], self.dF_geom[0,i], self.dF_czar[i], self.dF_czar_geom[0,i])
-                    out.write("%6d\t%14.6f\t%14.6f\t%14.6f\t%14.6f\t%14.6f\t%14.6f\t%14.6f\t%14.6f\n" % row)
-                out.close()
-
-            elif (self.method == 'metaD'):
-                head = ("Bin", "Xi", "Histogramm", "Mean Grad", "Bias Pot", "Bias Force", "dF", "dF geom")
-                out.write("%6s\t%14s\t%14s\t%14s\t%14s\t%14s\t%14s\t%14s\n" % head)
-                for i in range(len(self.bias[0])):
-                    row = (i, self.grid[0][i], self.histogramm[0,i], self.mean_grad[0,i], self.bias[0,i],self.metaforce[0,i], self.dF[i], self.dF_geom[0,i])
-                    out.write("%6d\t%14.6f\t%14.6f\t%14.6f\t%14.6f\t%14.6f\t%14.6f\t%14.6f\n" % row)
-                out.close()
-
-            elif (self.method == 'meta-eABF'):
-                head = ("Bin", "Xi", "Histogramm", "Mean Grad", "eABF bias", "MetaD bias", "dF/CZAR", "dF/CZAR geom")
-                out.write("%6s\t%14s\t%14s\t%14s\t%14s\t%14s\t%14s\t%14s\n" % head)
-                for i in range(len(self.bias[0])):
-                    row = (i, self.grid[0][i], self.histogramm[0,i], self.mean_grad[0,i], self.abfforce[0,i], self.metaforce[0,i],self.dF_czar[i], self.dF_czar_geom[0,i])
-                    out.write("%6d\t%14.6f\t%14.6f\t%14.6f\t%14.6f\t%14.6f\t%14.6f\t%14.6f\n" % row)
-                out.close()
-
-
-        else:
-            # 2D reaction coordinate
-            pass
+                elif (self.method == 'meta-eABF'):
+                    head = ("Bin", "Xi", "Histogramm", "Mean Grad", "eABF bias", "MetaD bias", "dF/CZAR", "dF/CZAR geom")
+                    out.write("%6s\t%14s\t%14s\t%14s\t%14s\t%14s\t%14s\t%14s\n" % head)
+                    for i in range(len(self.bias[0])):
+                        row = (i, self.grid[0][i], self.histogramm[0,i], self.mean_grad[0,i], self.abfforce[0,i], self.metaforce[0,i],self.dF_czar[i], self.dF_czar_geom[0,i])
+                        out.write("%6d\t%14.6f\t%14.6f\t%14.6f\t%14.6f\t%14.6f\t%14.6f\t%14.6f\n" % row)
+                    out.close()
+        '''
 
     # -----------------------------------------------------------------------------------------------------
     def print_parameters(self):
