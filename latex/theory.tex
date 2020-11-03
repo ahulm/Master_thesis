@@ -71,14 +71,14 @@ Historically, this idea emerged from thermodynamic integration (TI), were the fr
 and the free energy is calculated as the integral over this force.\autocite{kirkwood1935statistical,zwanzig1954high}
 In practice, as one has no prior knowledge of the free energy derivative, ABF uses an on-the-fly estimate of the mean force acting along the reaction coordinate. For this purpose the transition coordinate $\xi$, connecting two end points, is divided in $M$ equally spaced bins. The approximation of the bias force $\overline{F}(N_{Step},k)$ in bin $k$ is than the average of all collected force samples:\autocite{comer2015adaptive}
 \begin{equation}
-  \overline{F}(N_{Step},k) = \frac{R(N_{Step},k)}{N_{Step}^{k}} \sum_{\mu=1}^{N_{Step}^{k}} F_{\mu}^{k}
+  \overline{F}(N_{Step},k) = \frac{R(N_{Step}^k,k)}{N_{Step}^{k}} \sum_{\mu=1}^{N_{Step}^{k}} F_{\mu}^{k}
   \label{eq:mean force}
 \end{equation}
 \begin{equation}
-  R(N_{Step},k)=\left\{\begin{array}{ll} \frac{1}{N_{Step}}, & N_{Step}^{k} < N_{full} \\
-                                         1,          & N_{Step}^{k} \geq  N_{full} \end{array}\right. \label{eq:ramp}
+  R(N_{step}^k,k)=\left\{\begin{array}{ll} N_{full}, & N_{step}^{k} < N_{full} \\
+                                         1,  & N_{step}^{k} \geq  N_{full} \end{array}\right. \label{eq:ramp}
 \end{equation}
-with the linear ramp function $R(N_{Step},k)$ preventing large fluctuations of the running estimate of the average force at the beginning of the simulation from driving the system away from equilibrium. The number of samples when the full biasing force is applied, $N_{full}$, and the bin size are the only free parameters that have to be chosen by the user before the simulation. For a sufficiently large $N_{Step}$ equation \ref{eq:mean force} approaches the correct average force in each bin and the free energy difference $\Delta A$ can be estimated by the numerically integrating over the force estimates in individual bins:\autocite{comer2015adaptive}
+with the linear ramp function $R(N_{step}^k,k)$ preventing large fluctuations of the force estimate at the beginning of the simulation from driving the system away from equilibrium. The number of samples when the full biasing force is applied, $N_{full}$, and the bin size are the only free parameters that have to be chosen by the user before the simulation. For a sufficiently large number of samples $N_{step}^k$ equation \ref{eq:mean force} approaches the correct average force in each bin and the free energy difference $\Delta A$ can be estimated by the numerically integrating over the force estimates in individual bins:\autocite{comer2015adaptive}
 \begin{equation}
   \Delta A_{\xi} = - \sum_{k=1}^{M} \overline{F}(N_{Step},k) \delta \xi
 \end{equation}
@@ -97,7 +97,7 @@ Extended to multidimensional reaction coordinates \textbf{$\xi$} = ($\xi_i$) and
 \begin{equation}
   \textbf{v}_i \cdot \nabla \sigma_k = 0 \label{eq:cond2}
 \end{equation}
-As long all reaction coordinates $\xi_i$ are orthogonal to one another and to all constraints, $\textbf{v}_i = \nabla \xi_j/|\nabla \xi_j|^2$ is always a valid option.
+If all reaction coordinates $\xi_i$ are orthogonal to one another and to all constraints, $\textbf{v}_i = \nabla \xi_j/|\nabla \xi_j|^2$ is always a valid option.
 Otherwise conditions \ref{eq:cond1} and \ref{eq:cond2} can be fulfilled by orthogonalization:\autocite{ciccotti2005blue}
 \begin{equation}
   v_i (\textbf{x}) = \frac{Q^i \nabla \xi_i (\textbf{x})}{|Q^i \nabla \xi_i (\textbf{x})|} \label{eq:ortho v}
@@ -108,7 +108,7 @@ with projector $Q^i$ given by the orthonormal basis $\{\hat{n}|_{j}^{i}(\textbf{
 \end{equation}
 Replacing the inverse gradient by vectorfield $\textbf{v}_i$, expression \ref{eq:instforce old} finally reduces to:
 \begin{equation}
-  F(\xi_i,\textbf{x}) = -\nabla V(\textbf{x}) \cdot \textbf{v}_i + \beta^{-1} \nabla \cdot \textbf{v}_i
+  F(\xi_i,\textbf{x}) = -\nabla V(\textbf{x}) \cdot \textbf{v}_i(\textbf{x}) + \beta^{-1} \nabla \cdot \textbf{v}_i(\textbf{x})
 \end{equation}
 but still involves the calculation of second derivatives in the form of the divergence of vector fields $\textbf{v}_i$.\autocite{comer2015adaptive} Analytic expressions for bend angles and torsion angles, used in the present work, are given in the appendix. However, especially for torsion angles orthogonalization via equation \ref{eq:ortho v} becomes exceedingly tedious and inpracticel, significantly limiting the applicability of ABF for multidimensional reaction coordinates.
 

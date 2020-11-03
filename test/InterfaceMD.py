@@ -111,7 +111,7 @@ class MD:
 
     if potential == '1':
       
-      a = 1.4e-6 / H_in_kJmol 
+      a = 8.0e-6 / H_in_kJmol 
       b = 0.5    / H_in_kJmol 
       d = 80.0   
       e = 160.0   
