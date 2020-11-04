@@ -23,10 +23,10 @@ coords          = [100.0,0.0]
 potential       = '1'
 
 # ABF
-ats     = [[1,60,180,2,100],[2,-1,1,0.5,100]]
+#ats     = [[1,60,180,2,100],[2,-1,1,0.5,100]]
 
 # eABF
-#ats     = [[1,-50.0,50.0,2.0,100,3.0,100000],[2,-30.0,30.0,2.0,100,3.0,100000]]
+ats     = [[1,60.0,180.0,2.0,100,3.0,100000],[2,-1.0,1.0,0.5,100,3.0,100000]]
 
 # metadynamics
 #ats = [[1,60,180,1,0.1,2.0,20,2000.0],[2,-10,10,1,0.1,2.0,20,2000.0]]
@@ -44,11 +44,11 @@ step_count = 0
 
 the_md = MD(mass_in=mass,coords_in=coords,potential=potential,dt_in=dt,target_temp_in=target_temp,seed_in=seed)
 
-the_bias = ABM(the_md, ats, method = 'ABF', output_freq = 1000, random_seed = seed)
+the_bias = ABM(the_md, ats, method = 'eABF', output_freq = 1000, random_seed = seed)
 
 the_md.calc_init()
 
-the_bias.ABF(N_full = 50)
+the_bias.eABF()
 
 the_md.calc_etvp()
 
@@ -63,7 +63,7 @@ while step_count < nsteps:
     the_md.propagate(langevin=True, friction=friction)
     the_md.calc()
     
-    the_bias.ABF(N_full = 50)
+    the_bias.eABF()
     
     the_md.up_momenta(langevin=True, friction=friction)
     the_md.calc_etvp()
