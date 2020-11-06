@@ -1,8 +1,7 @@
 import sys
 import time
-import numpy as np
-import pandas as pd
 import random
+import numpy as np
 import scipy.integrate as spi
 
 # energy units
@@ -232,13 +231,9 @@ class ABM:
 
             self.__get_metaD_bias(xi, bink, gaussian_height, WT=WT, grid=grid)
             
-            if self.ncoords == 1:
-                self.the_md.forces += self.bias[0][bink[1],bink[0]] * delta_xi[0]
+            for i in range(self.ncoords):    
+                self.the_md.forces += self.bias[i][bink[1],bink[0]] * delta_xi[i]
             
-            else:
-                self.the_md.forces += self.bias[1][bink[1],bink[0]] * delta_xi[0]
-                self.the_md.forces += self.bias[0][bink[1],bink[0]] * delta_xi[1]
-
         self.traj = np.append(self.traj, [xi], axis = 0)
         
         if self.the_md.step%self.out_freq == 0:
@@ -286,8 +281,8 @@ class ABM:
                 
                 # apply biase force
                 Rk = 1.0 if self.histogramm[la_bin[1],la_bin[0]] > self.ramp_count[i] else self.histogramm[la_bin[1],la_bin[0]]/self.ramp_count[i]
-                self.bias[i][la_bin[1],la_bin[0]] += self.k[i] * dxi
-                self.ext_forces -= Rk * self.bias[i][la_bin[1],la_bin[0]]/self.histogramm[la_bin[1],la_bin[0]]
+                self.bias[i][la_bin[1],la_bin[0]] -= self.k[i] * dxi
+                self.ext_forces[i] += Rk * self.bias[i][la_bin[1],la_bin[0]]/self.histogramm[la_bin[1],la_bin[0]]
                   
         else:
 
@@ -357,21 +352,16 @@ class ABM:
 
                 # harmonic coupling of exteded coordinate to reaction coordinate
                 dxi                 = self.ext_coords[i] - xi[i]
-                self.ext_forces[i]  = self.k[i] * dxi
                 self.the_md.forces -= self.k[i] * dxi * delta_xi[i]
+                self.ext_forces[i]  = self.k[i] * dxi
 
                 # WTM bias
-                if self.ncoords == 1:
-                    self.the_md.forces += self.bias[0][la_bin[1],la_bin[0]] * delta_xi[0]
+                self.ext_forces[i] += self.bias[i][la_bin[1],la_bin[0]] 
             
-                else:
-                    self.the_md.forces += self.bias[1][la_bin[1],la_bin[0]] * delta_xi[0]
-                    self.the_md.forces += self.bias[0][la_bin[1],la_bin[0]] * delta_xi[1]
-                
                 # eABF bias
                 Rk = 1.0 if self.histogramm[la_bin[1],la_bin[0]] > self.ramp_count[i] else self.histogramm[la_bin[1],la_bin[0]]/self.ramp_count[i]
-                self.abfforce[i][la_bin[1],la_bin[0]] += self.k[i] * dxi
-                self.ext_forces[i] -= Rk * self.abfforce[i][la_bin[1],la_bin[0]]/self.histogramm[la_bin[1],la_bin[0]]
+                self.abfforce[i][la_bin[1],la_bin[0]] -= self.k[i] * dxi
+                self.ext_forces[i] += Rk * self.abfforce[i][la_bin[1],la_bin[0]]/self.histogramm[la_bin[1],la_bin[0]]
 
         else:
 
@@ -526,13 +516,13 @@ class ABM:
 
                             exp1 = np.power(self.grid[0][j]-xi[0],2.0)/self.variance[0]  
                             exp2 = np.power(self.grid[1][i]-xi[1],2.0)/self.variance[1]
-                            gaus = np.exp(-0.5*(exp1+exp2))
+                            gauss = np.exp(-0.5*(exp1+exp2))
 
-                            self.metapot[i,j] += w * gaus
+                            self.metapot[i,j] += w * gauss
+                            
+                            self.bias[0][i,j] -= w * gauss * (self.grid[0][j]-xi[0])/self.variance[0]
+                            self.bias[1][i,j] -= w * gauss * (self.grid[1][i]-xi[1])/self.variance[1]
 
-                    # force from numeric partial derivative along both CV's
-                    self.bias = np.gradient(self.metapot, self.grid[1], self.grid[0])
-                  
         else:
             # not yet implemented
             pass
@@ -610,7 +600,7 @@ class ABM:
             # numeric integration with Simpson rule
 
             for i in range(1,self.nbins_per_dim[0]):
-                dF[0,i] = spi.simps(mean_force[0][0,0:i], self.grid[0][0:i])
+                dF[0,i] = np.sum(mean_force[0][0,0:i]) * self.dx[0]
             dF -= dF.min()
 
         else:
@@ -620,7 +610,7 @@ class ABM:
                 for j in range(1,self.nbins_per_dim[0]):
                     
                     if self.histogramm[i,j] == 0:
-                        dF[i,j] == 0
+                        dF[i,j] == 0.0
                     else:
                         dF[i,j] += spi.simps(mean_force[0][i,0:j], self.grid[0][0:j])/2.0
                         dF[i,j] += spi.simps(mean_force[1][0:i,j], self.grid[1][0:i])/2.0
@@ -654,8 +644,7 @@ class ABM:
 
     # -----------------------------------------------------------------------------------------------------
     def __F_from_CZAR(self):
-        '''on-the-fly CZAR free energy estimate from trajectory of CV and extended coordinate
-           the outher 2 bins are cut due to numeric integration
+        '''on-the-fly CZAR estimate for unbiased free energy 
         
         args:
             -
@@ -770,7 +759,7 @@ class ABM:
             head = ("Xi1", "Histogramm", "Bias", "dF", "dF geom")
             out.write("%14s\t%14s\t%14s\t%14s\t%14s\n" % head)
             for i in range(self.nbins_per_dim[0]):
-                row = (self.grid[0][i], self.histogramm[0,i], self.mean_force[0][0,i], self.dF[0,i], self.sum_gradient[0,i])
+                row = (self.grid[0][i], self.histogramm[0,i], self.mean_force[0][0,i], self.dF[0,i], self.dF_geom[0,i])
                 out.write("%14.6f\t%14.6f\t%14.6f\t%14.6f\t%14.6f\n" % row)
 
         elif len(self.coord) == 2:
