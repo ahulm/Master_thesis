@@ -548,8 +548,12 @@ class ABM:
             return np.linalg.norm(delta_xi[0])
 
         else:
-            d = np.sqrt(np.outer(delta_xi[0],delta_xi[1]))
-            return np.linalg.det(d)
+            d = np.array([[0.0,0.0],[0.0,0.0]])
+            d[0,0] = np.dot(delta_xi[0],delta_xi[0])
+            d[1,1] = np.dot(delta_xi[1],delta_xi[1])
+            d[1,0] = np.dot(delta_xi[0],delta_xi[1])
+            d[0,1] = np.dot(delta_xi[1],delta_xi[0])
+            return np.linalg.det(np.sqrt(d))
 
     # -----------------------------------------------------------------------------------------------------
     def __propagate_extended(self, langevin=True, friction=1.0e-3):
@@ -711,7 +715,6 @@ class ABM:
         hist = self.histogramm if extended == False else self.hist_z
         
         log_grad_corr = self.__get_mean(self.geom_corr, hist)
-        print(log_grad_corr)
         log_grad_corr = np.log(log_grad_corr, out=np.zeros_like(log_grad_corr), where=(log_grad_corr!=0))
                 
  
