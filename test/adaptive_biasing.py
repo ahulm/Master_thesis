@@ -227,7 +227,7 @@ class ABM:
             self.histogramm[bink[1], bink[0]] += 1
             
             # gradient correction for geometric free energy
-            self.gom_corr[bink[1],bink[0]] += self.__get_gradient_correction(delta_xi)
+            self.geom_corr[bink[1],bink[0]] += self.__get_gradient_correction(delta_xi)
             
             # apply bias 
             self.__get_metaD_bias(xi, bink, gaussian_height, WT=WT, grid=grid)
@@ -300,7 +300,7 @@ class ABM:
             self.hist_z[bink[1],bink[0]] += 1
             
             # gradient correction for geometric free energy
-            self.gom_corr[bink[1],bink[0]] += self.__get_gradient_correction(delta_xi)
+            self.geom_corr[bink[1],bink[0]] += self.__get_gradient_correction(delta_xi)
             
             for i in range(self.ncoords):
                 self.force_correction_czar[i][bink[1],bink[0]] += self.k[i] * (self.ext_coords[i] - self.grid[i][bink[i]])
@@ -383,7 +383,7 @@ class ABM:
             self.hist_z[bink[1],bink[0]] += 1
             
             # gradient correction for geometric free energy
-            self.gom_corr[bink[1],bink[0]] += self.__get_gradient_correction(delta_xi)
+            self.geom_corr[bink[1],bink[0]] += self.__get_gradient_correction(delta_xi)
 
             # force correction  
             for i in range(self.ncoords):
@@ -717,7 +717,6 @@ class ABM:
         log_grad_corr = self.__get_mean(self.geom_corr, hist)
         log_grad_corr = np.log(log_grad_corr, out=np.zeros_like(log_grad_corr), where=(log_grad_corr!=0))
                 
- 
         self.dF_geom  = self.dF - kB_a * self.the_md.target_temp * log_grad_corr
         self.dF_geom -= self.dF_geom.min()
 
