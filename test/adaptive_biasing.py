@@ -3,6 +3,7 @@ import time
 import random
 import numpy as np
 import scipy.integrate as spi
+from scipy import interpolate
 
 # energy units
 kB          = 1.380648e-23      # J / K
@@ -189,7 +190,7 @@ class ABM:
                 v_i = delta_xi[i]/(delta_xi_n*delta_xi_n)
 		
                 # apply biase force
-                self.bias[i][bink[1],bink[0]] += np.dot(self.the_md.forces, v_i) + kB_a * self.the_md.target_temp * div_delta_xi[i]
+                self.bias[i][bink[1],bink[0]] += np.dot(self.the_md.forces, v_i) - kB_a * self.the_md.target_temp * div_delta_xi[i]
                 self.the_md.forces            -= Rk * (self.bias[i][bink[1],bink[0]]/self.histogramm[bink[1],bink[0]]) * delta_xi[i]
 
         if self.the_md.step%self.out_freq == 0:
@@ -228,7 +229,7 @@ class ABM:
             
             # gradient correction for geometric free energy
             self.geom_corr[bink[1],bink[0]] += self.__get_gradient_correction(delta_xi)
-            
+                        
             # apply bias 
             self.__get_metaD_bias(xi, bink, gaussian_height, WT=WT, grid=grid)
             for i in range(self.ncoords):    
@@ -272,8 +273,6 @@ class ABM:
              
             for i in range(self.ncoords):
 
-                self.sum_gradient[la_bin[1],la_bin[0]] += np.linalg.norm(delta_xi[i])
-
                 # harmonic coupling of exteded coordinate to reaction coordinate
                 dxi                 = self.ext_coords[i] - xi[i]
                 self.ext_forces[i]  = self.k[i] * dxi
@@ -293,13 +292,12 @@ class ABM:
                 self.ext_forces[i]  = self.k[i] * dxi
                 self.the_md.forces -= self.k[i] * dxi * delta_xi[i]
 
-        # accumulators for czar estimator
         if (xi <= self.maxx).all() and (xi >= self.minx).all():
+            # accumulators for czar estimator
            
             bink = self.__get_bin(xi)
             self.hist_z[bink[1],bink[0]] += 1
             
-            # gradient correction for geometric free energy
             self.geom_corr[bink[1],bink[0]] += self.__get_gradient_correction(delta_xi)
             
             for i in range(self.ncoords):
@@ -351,8 +349,6 @@ class ABM:
             
             for i in range(self.ncoords):
 
-                self.sum_gradient[la_bin[1],la_bin[0]] += np.linalg.norm(delta_xi[i])
-
                 # harmonic coupling of exteded coordinate to reaction coordinate
                 dxi                 = self.ext_coords[i] - xi[i]
                 self.the_md.forces -= self.k[i] * dxi * delta_xi[i]
@@ -375,17 +371,14 @@ class ABM:
                 self.ext_forces[i]  = self.k[i] * dxi
                 self.the_md.forces -= self.k[i] * dxi * delta_xi[i]
 
-        # accumulators for czar estimator
         if (xi <= self.maxx).all() and (xi >= self.minx).all():
+            # accumulators for czar estimator
             
-            # histogramm along physical coordinate 
             bink = self.__get_bin(xi)
             self.hist_z[bink[1],bink[0]] += 1
             
-            # gradient correction for geometric free energy
             self.geom_corr[bink[1],bink[0]] += self.__get_gradient_correction(delta_xi)
 
-            # force correction  
             for i in range(self.ncoords):
                 self.force_correction_czar[i][bink[1],bink[0]] += self.k[i] * (self.ext_coords[i] - self.grid[i][bink[i]])
         
@@ -416,7 +409,7 @@ class ABM:
             -
         '''
         xi = np.array([])
-        delta_xi	 = [0 for i in range(self.ncoords)]
+        delta_xi     = [0 for i in range(self.ncoords)]
         div_delta_xi = [0 for i in range(self.ncoords)]
 
         for i in range(self.ncoords):
@@ -450,7 +443,7 @@ class ABM:
                 x = self.the_md.coords[0]
                 xi = np.append(xi, 1.0/x)
                 delta_xi[i] += np.array([-1.0/(x*x),0])
-                div_dela_xi[i] = 2*xi[i]
+                div_delta_xi[i] -= 2*x
 
             else:
                 print("reaction coordinate not implemented!")
@@ -502,11 +495,9 @@ class ABM:
                         # scale height according to Well-Tempered metaD
                         w *= np.exp(-self.metapot[bink[1],bink[0]]/(kB_a*self.WT_dT[0]))
 
-                    # get new Gaussian 
                     dx = self.grid[0] - xi[0]
                     bias_factor = w * np.exp(-0.5*np.power(dx ,2.0)/self.variance[0])
                     
-                    # update bias potential and force 
                     self.metapot += bias_factor
                     self.bias[0] -= bias_factor.T * dx.T/self.variance[0]
                 
@@ -549,11 +540,10 @@ class ABM:
 
         else:
             d = np.array([[0.0,0.0],[0.0,0.0]])
-            d[0,0] = np.dot(delta_xi[0],delta_xi[0])
-            d[1,1] = np.dot(delta_xi[1],delta_xi[1])
-            d[1,0] = np.dot(delta_xi[0],delta_xi[1])
-            d[0,1] = np.dot(delta_xi[1],delta_xi[0])
-            return np.linalg.det(np.sqrt(d))
+            d[0,0] = np.linalg.norm(delta_xi[0])
+            d[1,1] = np.linalg.norm(delta_xi[1])
+            d[1,0] = d[0,1] = np.sqrt(np.dot(delta_xi[0],delta_xi[1]))
+            return np.linalg.det(d)
 
     # -----------------------------------------------------------------------------------------------------
     def __propagate_extended(self, langevin=True, friction=1.0e-3):
@@ -605,6 +595,7 @@ class ABM:
 
         args:
             a		(array, -)
+            b           (array, -)
         returns:
             -
         '''
@@ -624,27 +615,11 @@ class ABM:
         self.dF = np.array(np.zeros((self.nbins_per_dim[1],self.nbins_per_dim[0])), dtype=np.float64)
 
         if self.ncoords == 1:
-            # numeric integration with Simpson rule
+            # on-the-fly integraion only for 1D reaction coordinate
 
             for i in range(1,self.nbins_per_dim[0]):
                 self.dF[0,i] = np.sum(mean_force[0][0,0:i]) * self.dx[0]
-            self.dF -= self.dF.min()
 
-        else:
-            # use Simpson rule twice for integration in 2D
-            
-            for i in range(1,self.nbins_per_dim[1]):
-                for j in range(1,self.nbins_per_dim[0]):
-                    
-                    if self.histogramm[i,j] == 0:
-                        self.dF[i,j] == 0.0
-                    else:
-                        self.dF[i,j] += spi.simps(mean_force[0][i,0:j], self.grid[0][0:j])/2.0
-                        self.dF[i,j] += spi.simps(mean_force[1][0:i,j], self.grid[1][0:i])/2.0
-            
-            self.dF -= self.dF.min()
-
-        # get geometric free energie
         self.__F_geom_from_F()
 
     # -----------------------------------------------------------------------------------------------------
@@ -661,13 +636,11 @@ class ABM:
             # not yet implemented
             pass
 
-        # get standard free energie
         self.dF = - self.metapot
+        
         if WT==True:
             self.dF *= (self.the_md.target_temp + self.WT_dT[0])/self.WT_dT[0]
-        self.dF -= self.dF.min()
 
-        # get geometric free energie
         self.__F_geom_from_F()
 
     # -----------------------------------------------------------------------------------------------------
@@ -686,21 +659,18 @@ class ABM:
         avg_force = self.__get_mean(self.force_correction_czar, self.hist_z)         
         
         if self.ncoords == 1: 
-            # CZAR estimate for dF(z)/dz    
+            
             self.mean_force[0]  = - kB_a * self.the_md.target_temp * np.gradient(log_rho[0], self.grid[0]) + avg_force[0]
         
         else:
+            
             # partial derivatives of log(rho(z1,z2))
             der_log_rho = np.gradient(log_rho, self.grid[1], self.grid[0])
              
-            # CZAR forces dF(z1,z2)/dz1 and dF(z1,z2)/dz2
             self.mean_force[0] = - kB_a * self.the_md.target_temp * der_log_rho[1] + avg_force[0]
             self.mean_force[1] = - kB_a * self.the_md.target_temp * der_log_rho[0] + avg_force[1]    
 
-        # integrate czar estimate to get free energy
         self.__F_from_Force(self.mean_force)
-        
-        # get geometric free energie
         self.__F_geom_from_F(extended = True)
 	
     # -----------------------------------------------------------------------------------------------------
@@ -714,11 +684,11 @@ class ABM:
         '''
         hist = self.histogramm if extended == False else self.hist_z
         
-        log_grad_corr = self.__get_mean(self.geom_corr, hist)
-        log_grad_corr = np.log(log_grad_corr, out=np.zeros_like(log_grad_corr), where=(log_grad_corr!=0))
-                
-        self.dF_geom  = self.dF - kB_a * self.the_md.target_temp * log_grad_corr
-        self.dF_geom -= self.dF_geom.min()
+        grad_corr = self.__get_mean(self.geom_corr, hist)
+        grad_corr = np.log(grad_corr, out=np.zeros_like(grad_corr), where=(grad_corr!=0))
+        
+        self.dF_geom  = kB_a * self.the_md.target_temp * grad_corr     
+       
 
     # -----------------------------------------------------------------------------------------------------
     def write_traj(self, extended = False):
@@ -784,19 +754,28 @@ class ABM:
 	
         out = open(f"bias_out.dat", "w")
         if len(self.coord) == 1:
-            head = ("Xi1", "Histogramm", "Bias", "dF", "dF geom")
+            head = ("Xi1", "Histogramm", "Bias", "dF", "geom_corr")
             out.write("%14s\t%14s\t%14s\t%14s\t%14s\n" % head)
             for i in range(self.nbins_per_dim[0]):
                 row = (self.grid[0][i], self.histogramm[0,i], self.mean_force[0][0,i], self.dF[0,i], self.dF_geom[0,i])
                 out.write("%14.6f\t%14.6f\t%14.6f\t%14.6f\t%14.6f\n" % row)
 
         elif len(self.coord) == 2:
-            head = ("Xi1", "Xi1", "Histogramm", "Bias", "dF", "dF geom")
-            out.write("%14s\t%14s\t%14s\t%14s\t%14s\t%14s\n" % head)
-            for i in range(self.nbins_per_dim[1]):
-                for j in range(self.nbins_per_dim[0]):
-                    row = (self.grid[1][i], self.grid[0][j], self.histogramm[i,j], self.mean_force[0][i,j]+self.mean_force[1][i,j], self.dF[i,j], self.dF_geom[i,j])
-                    out.write("%14.6f\t%14.6f\t%14.6f\t%14.6f\t%14.6f\t%14.6f\n" % row)
+            if self.method == 'metaD':
+                head = ("Xi1", "Xi1", "Histogramm", "Bias1", "Bias2", "geom_corr", "dF")
+                out.write("%14s\t%14s\t%14s\t%14s\t%14s\t%14s\t%14s\n" % head)
+                for i in range(self.nbins_per_dim[1]):
+                    for j in range(self.nbins_per_dim[0]):
+                        row = (self.grid[1][i], self.grid[0][j], self.histogramm[i,j], self.mean_force[0][i,j], self.mean_force[1][i,j], self.dF_geom[i,j], self.dF[i,j])
+                        out.write("%14.6f\t%14.6f\t%14.6f\t%14.6f\t%14.6f\t%14.6f\t%14.6f\n" % row)
+                
+            else:
+                head = ("Xi1", "Xi1", "Histogramm", "Bias1", "Bias2", "geom_corr")
+                out.write("%14s\t%14s\t%14s\t%14s\t%14s\t%14s\n" % head)
+                for i in range(self.nbins_per_dim[1]):
+                    for j in range(self.nbins_per_dim[0]):
+                        row = (self.grid[1][i], self.grid[0][j], self.histogramm[i,j], self.mean_force[0][i,j], self.mean_force[1][i,j], self.dF_geom[i,j])
+                        out.write("%14.6f\t%14.6f\t%14.6f\t%14.6f\t%14.6f\t%14.6f\n" % row)
 
         out.close()
 
