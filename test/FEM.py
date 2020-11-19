@@ -16,14 +16,15 @@ kB_a       = kB / H_to_J       # Hartree / K
 class FEM:
     '''integration of 2D ABF gradients with finite element method
     '''
-    def __init__(self, inputname='bias_out.dat'):
+    def __init__(self, inputname='bias_out.dat', outputname='free_energy'):
         
         print("\n#######################################################")
         print("\tFEM integration of 2D ABF data")
         print("#######################################################\n")
         print("Initialize spline functions.\n")
         
-        data = np.loadtxt(inputname)
+        self.outname = outputname        
+        data = np.loadtxt(inputname, skiprows=1)
         
         # coordinates of bins
         xi_1 = data[:,0]
@@ -42,8 +43,8 @@ class FEM:
         dxi_1 = xi_1[1,0]-xi_1[0,0]
 
         # control points
-        self.dy = dxi_1 / 4
-        self.dx = dxi_2 / 4
+        self.dy = dxi_1 / 2
+        self.dx = dxi_2 / 2
         self.minx = minxi_2
         self.maxx = maxxi_2
         self.miny = minxi_1
@@ -128,7 +129,7 @@ class FEM:
         return [deriv_x, deriv_y]
 
     #----------------------------------------------------------------------------------------
-    def error_power(alpha, *args):
+    def error_power(self, alpha):
         '''
         '''
         a_gradB = np.zeros(shape=self.gradB.shape[1:])
@@ -169,7 +170,6 @@ class FEM:
         
         self.it = 0
         self.err0 = 0
-        self.start = time.perf_counter()
         err = self.error(self.alpha) 
         err0 = err
         
@@ -179,7 +179,9 @@ class FEM:
         print("--------------------------------------------------------")
         print("%6d\t%14.6f\t%14.6f\t%14.6f" % (self.it, err, 0.0, 0.0)) 
 
+        self.start = time.perf_counter()
         result = opt.minimize(self.error, self.alpha, method='BFGS', tol=ftol, callback=self.BFGS_progress, options=options)
+        
         self.alpha = result.x
         self.get_F()
 
@@ -306,7 +308,7 @@ class FEM:
     def write_output(self, F_surface, prob_surface, fitted_grad_x, fitted_grad_y, estim_err_x, estim_err_y):
         '''write output of free energy calculations
         '''
-        out = open(f"free_energy.dat", "w")
+        out = open(f"%s.dat" % (self.outname), "w")
 
         head = ("Xi1", "Xi1", "error x", "error y", "probability", "free energy [kJ/mol]")
         out.write("%14s\t%14s\t%14s\t%14s\t%14s\t%14s\n" % head)
@@ -358,5 +360,5 @@ class FEM:
             ax.tick_params(axis='x',length=6,width=3,labelsize=20, pad=10, direction='in')
         #
         plt.tight_layout()
-        plt.savefig("2D_FEM_fit.png", dpi=400)
+        plt.savefig(f"%s.png" % (self.outname), dpi=400)
         plt.close()
