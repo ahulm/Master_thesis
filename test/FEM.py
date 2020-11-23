@@ -1,7 +1,7 @@
 import numpy as np
 import matplotlib.pyplot as plt
 import scipy.optimize as opt
-from scipy import interpolate as interp
+from scipy import interpolate 
 import time
 
 H_in_kJmol = 2625.499639
@@ -43,17 +43,17 @@ class FEM:
         dxi_1 = xi_1[1,0]-xi_1[0,0]
 
         # control points
-        self.dy = dxi_1 / 2
-        self.dx = dxi_2 / 2
+        self.dy = dxi_1 / 4
+        self.dx = dxi_2 / 4
         self.minx = minxi_2
         self.maxx = maxxi_2
         self.miny = minxi_1
         self.maxy = maxxi_1
 
-        self.x = np.arange(self.minx-self.dx, self.maxx+self.dx, self.dx)
-        self.y = np.arange(self.miny-self.dy, self.maxy+self.dy, self.dy)
+        self.x = np.arange(self.minx, self.maxx+self.dx, self.dx)
+        self.y = np.arange(self.miny, self.maxy+self.dy, self.dy)
         self.lenx = len(self.x)
-        self.leny = len(self.y)        
+        self.leny = len(self.y)      
         self.xx, self.yy = np.meshgrid(self.x,self.y)
         
         # coefficient matrix
@@ -61,9 +61,22 @@ class FEM:
         print("%30s:\t%8d" % ("Number of coefficients", self.alpha.size))
         
         # interploate gradient to control points
-        Ix = interp.RectBivariateSpline(np.unique(data[:,0]), np.unique(data[:,1]), data[:,3].reshape(self.y_bins, self.x_bins)*H_in_kJmol)
-        Iy = interp.RectBivariateSpline(np.unique(data[:,0]), np.unique(data[:,1]), data[:,4].reshape(self.y_bins, self.x_bins)*H_in_kJmol)
-        self.D = np.array([Ix(self.y,self.x), Iy(self.y,self.x)]) 
+        #Ix = interpolate.RectBivariateSpline(np.unique(data[:,0]), np.unique(data[:,1]), data[:,3].reshape(self.y_bins, self.x_bins))
+        #Iy = interpolate.RectBivariateSpline(np.unique(data[:,0]), np.unique(data[:,1]), data[:,4].reshape(self.y_bins, self.x_bins))
+        #self.D = np.array([Ix(self.y,self.x), Iy(self.y,self.x)])*H_in_kJmol 
+
+        origD = [data[:,3].reshape(self.y_bins, self.x_bins), data[:,4].reshape(self.y_bins, self.x_bins)]
+        D = [np.zeros(shape=(self.leny,self.lenx), dtype=np.float), np.zeros(shape=(self.leny,self.lenx), dtype=np.float)]
+        for xy in range(2):
+            D[xy][::4, ::4] = origD[xy]
+            D[xy][::4,2::4] = 0.5*D[xy][::4, :-4:4] + 0.5*D[xy][::4,4::4] 
+            D[xy][::4,1::4] = 0.5*D[xy][::4,2::4] + 0.5*D[xy][::4,:-4:4]
+            D[xy][::4,3::4] = 0.5*D[xy][::4,2::4] + 0.5*D[xy][::4, 4::4] 
+            D[xy][2::4] = 0.5*D[xy][:-4:4] + 0.5*D[xy][4::4]
+            D[xy][1::4]= 0.5*D[xy][2::4] + 0.5*D[xy][:-4:4]
+            D[xy][3::4]= 0.5*D[xy][2::4] + 0.5*D[xy][4::4] 
+        self.D = np.asarray(D)
+        self.D *= 2625.5 # converting Hartree*xi^-1 in kJ*mol^-1*xi^-1
         self.D = self.D[:,:-1,:-1]
         print("%30s:\t%8d" % ("Elements in gradient matrix", self.D.size))
         
@@ -79,9 +92,6 @@ class FEM:
         self.gradB = np.asarray(self.gradB)
         self.gradB = self.gradB[:,:,:-1,:-1]
         print("%30s:\t%8d" % ("Elements in gradB matrix", self.gradB.size))
-
-        #self.error_bin = np.zeros(shape=self.alpha.shape)
-        #self.error_per_bin()
 
     #----------------------------------------------------------------------------------------
     def pyramid(self, x, y, dx, dy, cx, cy):
@@ -136,7 +146,6 @@ class FEM:
         for ii, a in enumerate(alpha):
             a_gradB += a*self.gradB[ii]
         a_gradB_D = a_gradB - self.D
-        
         return np.power(a_gradB_D, 2).sum()
 
     #--------------------------------------------------------------------------------------
@@ -149,12 +158,12 @@ class FEM:
         a_gradB_D = a_gradB - self.D
         err = np.power(a_gradB_D, 2).sum(axis=0)
         err = err.mean()
-        
         return np.sqrt(err)
 
     #--------------------------------------------------------------------------------------
-    def BFGS(self, maxiter=15000, ftol=1e-08, gtol=1e-5, error_function='rmsd'):
-        
+    def BFGS(self, maxiter=15000, ftol=1e-10, gtol=1e-5, error_function='rmsd'):
+        '''BFGS minimization of error function
+        '''        
         if error_function == 'rmsd':
             print("\nerror = RMSD")
             self.error = self.error_rmsd
@@ -197,115 +206,30 @@ class FEM:
 
          return False
 
-    #---------------------------------------------------------------------------------------
-    def error_per_bin(self):
-        '''get error of fit per alpha
-        '''
-        err_grad_x = np.zeros(shape=(self.leny-1,self.lenx-1), dtype=np.float64)
-        err_grad_y = np.zeros(shape=(self.leny-1,self.lenx-1), dtype=np.float64)
-       
-        for ii, a in enumerate(self.alpha):
-            err_grad_x += a*self.gradB[ii][0]
-            err_grad_y += a*self.gradB[ii][1] 
-
-        err_grad_x = np.abs(err_grad_x - self.D[0])
-        err_grad_y = np.abs(err_grad_y - self.D[1])
-        
-        self.error_bin = self.error_bin.reshape(self.y_bins, self.x_bins)
-        for ii in range(0, self.leny-1, 4):
-            for jj in range(0, self.lenx-1, 4):
-                self.error_bin[int(ii/4),int(jj/4)]  = err_grad_x[ii:ii+3,jj:jj+3].mean()/2.0
-                self.error_bin[int(ii/4),int(jj/4)] += err_grad_y[ii:ii+3,jj:jj+3].mean()/2.0
-        self.error_bin = self.error_bin.flatten()
-    
-    #--------------------------------------------------------------------------------------
-    def MC_local(self, T=5000, max_iter = 1000000, conv_crit=1.0, out_freq=1000, seed_in=777):
-        '''Metropolis monte carlo algorithm to minimize error with simmulated annealing
-
-        args:
-            T		(double, 5000, initial temperature for boltzmann factor)
-            max_iter    (int, 1000000, maxium iterations)
-            conv_crit   (double, 1.0, converence criterium)
-            seed_in     (int, 777, random seed)
-
-        returns:
-            - 
-        '''
-        np.random.seed(seed_in)
-        
-        err = [self.error(self.alpha)]
-        its = [0]
-        
-        out_freq = int(max_iter/out_freq)
-
-        print("%40s:\t%18d" % ("initial Temperature", T))
-        print("%40s:\t%18d" % ("Output Intervall", out_freq))
-        print("%40s:\t%18.3f\n" % ("Maximum seach radius", self.error_bin.max()))
-        print("%8s\t%8s\t%14s\t%14s\t%14s" % ("It", "Temp [K]", "Error", "max diff", "dconv")) 
-        print("%8d\t%8.2f\t%14.6f\t%14.6f\t%14.6f" % (0, T, err[-1], self.error_bin.max(), err[-1]-conv_crit))            
-        
-        it = 0
-        T_0 = T
-        no_conv = True
-
-        while it < max_iter and no_conv:
-            it += 1
-            
-            # update random element 
-            ii = np.random.choice(self.alpha.shape[0], 1, replace=False)
-            dx = self.error_bin[ii] * np.random.uniform(-1.0, 1.0)
-            self.alpha[ii] += dx
-            
-            # get error for new alpha
-            err_new = self.error(self.alpha)
-        
-            accept_ratio = np.exp(-(err_new-err[-1])/(kB_a*T))
-            
-            if accept_ratio >= 1.0 or accept_ratio > np.random.uniform(0,1):   
-                
-                # accept new alpha
-                err.append(err_new)
-                its.append(it)
-                self.error_per_bin()
-        
-                # check convergence
-                if err_new <= conv_crit:
-                    no_conv = False
-                
-            else:
-                
-                # reject
-                self.alpha[ii] -= dx
-            
-            if it%out_freq == 0:
-                T = T_0 * (1-it/max_iter)   
-                print("%8d\t%8.2f\t%14.6f\t%14.6f\t%14.6f" % (it, T, err[-1], self.error_bin.max(), err_new-conv_crit))            
-                self.get_F()
-            
-
     #--------------------------------------------------------------------------------------
     def get_F(self):
-        
-        F_surface = np.zeros(shape=(self.leny,self.lenx), dtype=np.float)
-        fitted_grad_x = np.zeros(shape=(self.leny-1,self.lenx-1), dtype=np.float)
-        fitted_grad_y = np.zeros(shape=(self.leny-1,self.lenx-1), dtype=np.float)
+        '''
+        ''' 
+        F_surface = np.zeros(shape=(self.leny,self.lenx), dtype=np.float64)
+        fitted_grad_x = np.zeros(shape=(self.leny-1,self.lenx-1), dtype=np.float64)
+        fitted_grad_y = np.zeros(shape=(self.leny-1,self.lenx-1), dtype=np.float64)
+
         for ii, a in enumerate(self.alpha):
-            F_surface += a*self.B[ii]
+            F_surface     += a*self.B[ii]
             fitted_grad_x += a*self.gradB[ii][0]
             fitted_grad_y += a*self.gradB[ii][1]
     
         prob_surface = np.exp(-F_surface/RT) 
         prob_surface /= prob_surface.sum()*self.dx*self.dy
-        F_surface = - RT * np.log(prob_surface)
     
         estim_err_x = np.abs(fitted_grad_x - self.D[0]) 
         estim_err_y = np.abs(fitted_grad_y - self.D[1]) 
          
-        self.write_output(F_surface, prob_surface, fitted_grad_x, fitted_grad_y, estim_err_x, estim_err_y) 
+        self.write_output(F_surface, prob_surface, estim_err_x, estim_err_y) 
         self.plot_F(F_surface, estim_err_x, estim_err_y)
 
     # -----------------------------------------------------------------------------------------------------
-    def write_output(self, F_surface, prob_surface, fitted_grad_x, fitted_grad_y, estim_err_x, estim_err_y):
+    def write_output(self, F_surface, prob_surface, estim_err_x, estim_err_y):
         '''write output of free energy calculations
         '''
         out = open(f"%s.dat" % (self.outname), "w")
@@ -350,8 +274,8 @@ class FEM:
         for ax in axs:
             ax.set_ylim([self.miny, self.maxy])
             ax.set_xlim([self.minx, self.maxx])
-            ax.set_ylabel(r'$\xi_1$', fontsize=20)
-            ax.set_xlabel(r'$\xi_2$', fontsize=20)
+            ax.set_xlabel(r'$\xi_1$', fontsize=20)
+            ax.set_ylabel(r'$\xi_2$', fontsize=20)
             ax.spines['bottom'].set_linewidth('3')
             ax.spines['top'].set_linewidth('3')
             ax.spines['left'].set_linewidth('3')
