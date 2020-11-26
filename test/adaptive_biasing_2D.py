@@ -67,7 +67,7 @@ class ABM:
     Output:
         bias_out.txt    text file containing i.a. CV, histogramm, bias, standard free energy and geometric free energy
     '''
-    def __init__(self, MD, ats, method = 'meta-eABF', output_freq = 1000, friction = 1.0e-3, seed_in = None):
+    def __init__(self, MD, ats, method = 'meta-eABF', output_freq = 1000, friction = 1.0e-3, random_seed = None):
 	
         # general parameters
         self.the_md     = MD
@@ -76,10 +76,10 @@ class ABM:
         self.friction   = friction
         
         self.ncoords    = len(ats)
-        self.atoms      = np.array([item[0] for item in ats])-1
-        self.minx       = np.array([np.radians(item[1]) for item in ats])
-        self.maxx       = np.array([np.radians(item[2]) for item in ats])
-        self.dx         = np.array([np.radians(item[3]) for item in ats])
+        self.coord      = np.array([item[0] for item in ats])
+        self.minx       = np.array([item[1] for item in ats])
+        self.maxx       = np.array([item[2] for item in ats])
+        self.dx         = np.array([item[3] for item in ats])
 
         (xi, delta_xi, div_delta_xi) = self.__get_coord()
         self.traj = np.array([xi])
@@ -87,7 +87,7 @@ class ABM:
         # get number of bins
         self.nbins_per_dim = np.array([1,1])
         self.grid          = []
-        for i in range(len(self.atoms)):
+        for i in range(len(self.coord)):
             self.nbins_per_dim[i] = int(np.ceil(np.abs(self.maxx[i]-self.minx[i])/self.dx[i])) if self.dx[i] > 0 else 1
             self.grid.append(np.linspace(self.minx[i]+self.dx[i]/2,self.maxx[i]-self.dx[i]/2,self.nbins_per_dim[i]))
         
@@ -97,16 +97,14 @@ class ABM:
         self.histogramm = np.zeros((self.nbins_per_dim[1],self.nbins_per_dim[0]), dtype=np.float64)
         self.geom_corr  = np.zeros((self.nbins_per_dim[1],self.nbins_per_dim[0]), dtype=np.float64)
 
-        if method == 'reference':
+        if method == 'ABF' or method == 'reference':
+            # no more parameters to initialize
             pass
-
-        elif method == 'ABF':
-            self.CV_crit    = np.zeros((self.ncoords,self.nbins_per_dim[1],self.nbins_per_dim[0]), dtype=np.float64)
 
         elif method == 'eABF' or method == 'meta-eABF':
             # setup extended system for eABF or meta-eABF
             
-            sigma         = np.array([np.radians(item[4]) for item in ats])
+            sigma         = np.array([item[4] for item in ats])
             self.k        = (kB_a*self.the_md.target_temp) / (sigma*sigma)
             self.ext_mass = np.array([item[5] for item in ats])
             
@@ -116,15 +114,11 @@ class ABM:
             self.ext_forces  = np.zeros(self.ncoords)
             self.ext_momenta = np.zeros(self.ncoords)
             
-            if type(seed_in) is int:
-                random.seed(seed_in)
+            if type(random_seed) is int:
+                random.seed(random_seed)
             else:
-                try:
-                    random.setstate(seed_in)
-                except:
-                    print("\tThe provided seed was neither an int nor a state of random")
-                    exit(1)
-           
+                print("\nNo seed was given for the random number generator of ABM so the system time is used!\n")
+            
             for i in range(self.ncoords):
                 # initialize extended system at target temp of MD simulation
             
@@ -142,14 +136,14 @@ class ABM:
                 
                 self.metapot  = np.zeros((self.nbins_per_dim[1],self.nbins_per_dim[0]), dtype=np.float64)
                 self.abfforce = np.copy(self.bias)
-                self.variance = np.array([np.radians(item[6]) for item in ats])
+                self.variance = np.array([item[6] for item in ats])
                 self.maxBias  = [1.0/H_to_kJmol,1.0/H_to_kJmol]        
 
         elif method == 'metaD':
             # parameters for metaD or WT-metaD
             
             self.metapot  = np.zeros((self.nbins_per_dim[1],self.nbins_per_dim[0]), dtype=np.float64)
-            self.variance = np.array([np.radians(item[4]) for item in ats])
+            self.variance = np.array([item[4] for item in ats])
             self.maxBias  = [1.0/H_to_kJmol,1.0/H_to_kJmol]        
        
         else:
@@ -182,15 +176,13 @@ class ABM:
             self.geom_corr[bink[1],bink[0]] += self.__get_gradient_correction(delta_xi)
 
         else:
+            # confinement
             for i in range(self.ncoords):
+                if xi[i] > self.maxx[i]:
+                    self.the_md.forces -= 10.0/H_to_kJmol * (self.maxx[i]-xi[i]) * delta_xi[i] 
 
-                # confinement
-                max_diff = self.__diff_angles(self.maxx[i], xi[i]) 
-                min_diff = self.__diff_angles(self.minx[i], xi[i])
-                if abs(max_diff) < abs(min_diff):
-                    self.the_md.forces += 100.0/H_to_kJmol * max_diff * delta_xi[i]
-                else:
-                    self.the_md.forces += 100.0/H_to_kJmol * min_diff * delta_xi[i]
+                elif xi[i] < self.minx[i]:
+                    self.the_md.forces -= 10.0/H_to_kJmol * (self.minx[i]-xi[i]) * delta_xi[i]   
 
         if self.the_md.step%self.out_freq == 0:
             # write output
@@ -237,23 +229,19 @@ class ABM:
                 # inverse gradient v_i
                 delta_xi_n = np.linalg.norm(delta_xi[i])
                 v_i = delta_xi[i]/(delta_xi_n*delta_xi_n)
-            
-                self.CV_crit[i][bink[1],bink[0]] += np.dot(delta_xi, v_i)         
 		
                 # apply biase force
                 self.bias[i][bink[1],bink[0]] += np.dot(self.the_md.forces, v_i) - kB_a * self.the_md.target_temp * div_delta_xi[i]
                 self.the_md.forces            -= Rk * (self.bias[i][bink[1],bink[0]]/self.histogramm[bink[1],bink[0]]) * delta_xi[i]
                 
         else:
+            # confinement
             for i in range(self.ncoords):
+                if xi[i] > self.maxx[i]:
+                    self.the_md.forces -= 10.0/H_to_kJmol * (self.maxx[i]-xi[i]) * delta_xi[i] 
 
-                # confinement
-                max_diff = self.__diff_angles(self.maxx[i], xi[i]) 
-                min_diff = self.__diff_angles(self.minx[i], xi[i])
-                if abs(max_diff) < abs(min_diff):
-                    self.the_md.forces += 100.0/H_to_kJmol * max_diff * delta_xi[i]
-                else:
-                    self.the_md.forces += 100.0/H_to_kJmol * min_diff * delta_xi[i]
+                elif xi[i] < self.minx[i]:
+                    self.the_md.forces -= 10.0/H_to_kJmol * (self.minx[i]-xi[i]) * delta_xi[i]   
 
         if self.the_md.step%self.out_freq == 0:
             # write output
@@ -302,16 +290,14 @@ class ABM:
                 self.the_md.forces += bias[i] * delta_xi[i]
         
         else:
+            # confinement 
             for i in range(self.ncoords):
+                if xi[i] > self.maxx[i]:
+                    self.the_md.forces -= 10.0*self.maxBias[i] * (self.maxx[i]-xi[i]) * delta_xi[i] 
 
-                # confinement 
-                max_diff = self.__diff_angles(self.maxx[i], xi[i])
-                min_diff = self.__diff_angles(self.minx[i], xi[i])
-                if abs(max_diff) < abs(min_diff):
-                    self.the_md.forces += 10.0*self.maxBias[i] * max_diff * delta_xi[i]
-                else:
-                    self.the_md.forces += 10.0*self.maxBias[i] * min_diff * delta_xi[i]
-
+                elif xi[i] < self.minx[i]:
+                    self.the_md.forces -= 10.0*self.maxBias[i] * (self.minx[i]-xi[i]) * delta_xi[i]   
+ 
         self.traj = np.append(self.traj, [xi], axis = 0)
         
         if self.the_md.step%self.out_freq == 0:
@@ -350,7 +336,7 @@ class ABM:
             for i in range(self.ncoords):
 
                 # harmonic coupling of extended coordinate to reaction coordinate
-                dxi                 = self.__diff_angles(self.ext_coords[i],xi[i])
+                dxi                 = self.ext_coords[i] - xi[i]
                 self.ext_forces[i]  = self.k[i] * dxi
                 self.the_md.forces -= self.k[i] * dxi * delta_xi[i]
                 
@@ -364,17 +350,16 @@ class ABM:
             for i in range(self.ncoords):
 
                 # harmonic coupling
-                dxi                 = self.__diff_angles(self.ext_coords[i],xi[i])
+                dxi                 = self.ext_coords[i] - xi[i]
                 self.ext_forces[i]  = self.k[i] * dxi
                 self.the_md.forces -= self.k[i] * dxi * delta_xi[i]
 
                 # confinement
-                max_diff = self.__diff_angles(self.maxx[i], self.ext_coords[i]) 
-                min_diff = self.__diff_angles(self.minx[i], self.ext_coords[i])
-                if abs(max_diff) < abs(min_diff):
-                    self.ext_forces -= 100.0*self.k * max_diff
-                else:
-                    self.ext_forces -= 100.0*self.k * min_diff
+                if self.ext_coords[i] > self.maxx[i]:
+                    self.ext_forces -= 1.0/H_to_kJmol * (self.maxx[i]-self.ext_coords[i]) 
+
+                elif self.ext_coords[i] < self.minx[i]:
+                    self.ext_forces -= 1.0/H_to_kJmol * (self.minx[i]-self.ext_coords[i])  
 
         if (xi <= self.maxx).all() and (xi >= self.minx).all():
             # accumulators for czar estimator
@@ -385,8 +370,7 @@ class ABM:
             self.geom_corr[bink[1],bink[0]] += self.__get_gradient_correction(delta_xi)
             
             for i in range(self.ncoords):
-                dx = self.__diff_angles(self.ext_coords[i], self.grid[i][bink[i]])
-                self.force_correction_czar[i][bink[1],bink[0]] += self.k[i] * dx 
+                self.force_correction_czar[i][bink[1],bink[0]] += self.k[i] * (self.ext_coords[i] - self.grid[i][bink[i]])
 
         self.__up_momenta_extended()
 
@@ -439,13 +423,16 @@ class ABM:
             for i in range(self.ncoords):
 
                 # harmonic coupling of extended coordinate to reaction coordinate
-                dxi                 = self.__diff_angles(self.ext_coords, xi)
+                dxi                 = self.ext_coords[i] - xi[i]
                 self.ext_forces[i]  = self.k[i] * dxi
                 self.the_md.forces -= self.k[i] * dxi * delta_xi[i]
 
                 # metadynamics bias
                 self.ext_forces[i] += meta_force[i]
       
+                if abs(meta_force[i]) >= self.maxBias[i]:
+                    self.maxBias[i] = abs(meta_force[i])
+
                 # eABF bias
                 Rk = 1.0 if self.histogramm[la_bin[1],la_bin[0]] > N_full else self.histogramm[la_bin[1],la_bin[0]]/N_full
                 self.abfforce[i][la_bin[1],la_bin[0]] -= self.k[i] * dxi  
@@ -456,17 +443,16 @@ class ABM:
             for i in range(self.ncoords):
 
                 # harmonic coupling
-                dxi                 = self.__diff_angles(self.ext_coords[i], xi[i])
+                dxi                 = self.ext_coords[i] - xi[i]
                 self.ext_forces[i]  = self.k[i] * dxi
                 self.the_md.forces -= self.k[i] * dxi * delta_xi[i]
 
                 # confinement
-                max_diff = self.__diff_angles(self.maxx[i], self.ext_coords[i]) 
-                min_diff = self.__diff_angles(self.minx[i], self.ext_coords[i])
-                if abs(max_diff) < abs(min_diff):
-                    self.ext_forces -= 1000.0*self.k * max_diff
-                else:
-                    self.ext_forces -= 1000.0*self.k * min_diff
+                if self.ext_coords[i] > self.maxx[i]:
+                    self.ext_forces -= 10.0*self.maxBias[i] * (self.maxx[i]-self.ext_coords[i]) 
+
+                if self.ext_coords[i] < self.minx[i]:
+                    self.ext_forces -= 10.0*self.maxBias[i] * (self.minx[i]-self.ext_coords[i])  
 
         if (xi <= self.maxx).all() and (xi >= self.minx).all():
             # accumulators for czar estimator
@@ -477,8 +463,7 @@ class ABM:
             self.geom_corr[bink[1],bink[0]] += self.__get_gradient_correction(delta_xi)
 
             for i in range(self.ncoords):
-                dx = self.__diff_angles(self.ext_coords[i], self.grid[i][bink[i]])
-                self.force_correction_czar[i][bink[1],bink[0]] += self.k[i] * dx
+                self.force_correction_czar[i][bink[1],bink[0]] += self.k[i] * (self.ext_coords[i] - self.grid[i][bink[i]])
         
         self.__up_momenta_extended()
 
@@ -498,7 +483,7 @@ class ABM:
         self.timing = time.perf_counter() - start
 
     # -----------------------------------------------------------------------------------------------------
-    def __get_angle(self, i):
+    def __get_angle(self):
         '''get bond angle between three atoms in rad
 
         args:
@@ -506,9 +491,9 @@ class ABM:
         returns:
             angle        (double, -)
         '''    
-        p1 = np.array([self.the_md.coords[3*self.atoms[i][0]],self.the_md.coords[3*self.atoms[i][0]+1],self.the_md.coords[3*self.atoms[i][0]+2]],dtype=np.float)
-        p2 = np.array([self.the_md.coords[3*self.atoms[i][1]],self.the_md.coords[3*self.atoms[i][1]+1],self.the_md.coords[3*self.atoms[i][1]+2]],dtype=np.float)
-        p3 = np.array([self.the_md.coords[3*self.atoms[i][2]],self.the_md.coords[3*self.atoms[i][2]+1],self.the_md.coords[3*self.atoms[i][2]+2]],dtype=np.float)
+        p1 = np.array([self.the_md.coords[3*self.atom[0]],self.the_md.coords[3*self.atom[0]+1],self.the_md.coords[3*self.atom[0]+2]],dtype=np.float)
+        p2 = np.array([self.the_md.coords[3*self.atom[1]],self.the_md.coords[3*self.atom[1]+1],self.the_md.coords[3*self.atom[1]+2]],dtype=np.float)
+        p3 = np.array([self.the_md.coords[3*self.atom[2]],self.the_md.coords[3*self.atom[2]+1],self.the_md.coords[3*self.atom[2]+2]],dtype=np.float)
                         
         q12 = p2-p1
         q23 = p2-p3
@@ -522,7 +507,7 @@ class ABM:
         return np.arccos(np.dot(q12_u,q23_u))
         
     # -----------------------------------------------------------------------------------------------------
-    def __get_torsion(self, i):
+    def __get_torsion(self):
         '''get torsion angle between four atoms in rad
 
         args:
@@ -530,10 +515,10 @@ class ABM:
         returns:
             torsion        (double, -)
         '''
-        p1 = np.array([self.the_md.coords[3*self.atoms[i][0]],self.the_md.coords[3*self.atoms[i][0]+1],self.the_md.coords[3*self.atoms[i][0]+2]],dtype=np.float)
-        p2 = np.array([self.the_md.coords[3*self.atoms[i][1]],self.the_md.coords[3*self.atoms[i][1]+1],self.the_md.coords[3*self.atoms[i][1]+2]],dtype=np.float)
-        p3 = np.array([self.the_md.coords[3*self.atoms[i][2]],self.the_md.coords[3*self.atoms[i][2]+1],self.the_md.coords[3*self.atoms[i][2]+2]],dtype=np.float)
-        p4 = np.array([self.the_md.coords[3*self.atoms[i][3]],self.the_md.coords[3*self.atoms[i][3]+1],self.the_md.coords[3*self.atoms[i][3]+2]],dtype=np.float)
+        p1 = np.array([self.the_md.coords[3*self.atom[0]],self.the_md.coords[3*self.atom[0]+1],self.the_md.coords[3*self.atom[0]+2]],dtype=np.float)
+        p2 = np.array([self.the_md.coords[3*self.atom[1]],self.the_md.coords[3*self.atom[1]+1],self.the_md.coords[3*self.atom[1]+2]],dtype=np.float)
+        p3 = np.array([self.the_md.coords[3*self.atom[2]],self.the_md.coords[3*self.atom[2]+1],self.the_md.coords[3*self.atom[2]+2]],dtype=np.float)
+        p4 = np.array([self.the_md.coords[3*self.atom[3]],self.the_md.coords[3*self.atom[3]+1],self.the_md.coords[3*self.atom[3]+2]],dtype=np.float)
         
         q12 = p1 - p2
         q23 = p3 - p2
@@ -547,7 +532,7 @@ class ABM:
         return np.arctan2(np.dot(np.cross(q23_u,n1),n2),np.dot(n1,n2))
  
     # -----------------------------------------------------------------------------------------------------
-    def __first_derivative_angle(self, i):
+    def __first_derivative_angle(self):
         '''gradient along bend angle 
 
         args:
@@ -555,9 +540,9 @@ class ABM:
         returns:
             delta_xi        (array, -)
         ''' 
-        p1 = np.array([self.the_md.coords[3*self.atoms[i][0]],self.the_md.coords[3*self.atoms[i][0]+1],self.the_md.coords[3*self.atoms[i][0]+2]],dtype=np.float)
-        p2 = np.array([self.the_md.coords[3*self.atoms[i][1]],self.the_md.coords[3*self.atoms[i][1]+1],self.the_md.coords[3*self.atoms[i][1]+2]],dtype=np.float)
-        p3 = np.array([self.the_md.coords[3*self.atoms[i][2]],self.the_md.coords[3*self.atoms[i][2]+1],self.the_md.coords[3*self.atoms[i][2]+2]],dtype=np.float)
+        p1 = np.array([self.the_md.coords[3*self.atom[0]],self.the_md.coords[3*self.atom[0]+1],self.the_md.coords[3*self.atom[0]+2]],dtype=np.float)
+        p2 = np.array([self.the_md.coords[3*self.atom[1]],self.the_md.coords[3*self.atom[1]+1],self.the_md.coords[3*self.atom[1]+2]],dtype=np.float)
+        p3 = np.array([self.the_md.coords[3*self.atom[2]],self.the_md.coords[3*self.atom[2]+1],self.the_md.coords[3*self.atom[2]+2]],dtype=np.float)
         
         q12 = p1-p2
         q23 = p2-p3
@@ -576,16 +561,16 @@ class ABM:
         # sum(dxi)=0
         dxi2 = - (dxi1 + dxi3)
         
-        delta_xi = np.zeros(3*self.the_md.natoms)
+        delta_xi = np.zeros(3*self.natoms)
         for dim in range(0,3):
-            delta_xi[self.atoms[i][0]*3+dim] += dxi1[dim]
-            delta_xi[self.atoms[i][1]*3+dim] += dxi2[dim]
-            delta_xi[self.atoms[i][2]*3+dim] += dxi3[dim]
+            delta_xi[atom[0]*3+dim] += dxi1[dim]
+            delta_xi[atom[1]*3+dim] += dxi2[dim]
+            delta_xi[atom[2]*3+dim] += dxi3[dim]
         
         return delta_xi
 
     # -----------------------------------------------------------------------------------------------------
-    def __first_derivative_torsion(self, i):
+    def __first_derivative_torsion(self):
         '''gradient along torsion angle
 
         args:
@@ -593,10 +578,10 @@ class ABM:
         returns:
             delta_xi        (array, -)
         ''' 
-        p1 = np.array([self.the_md.coords[3*self.atoms[i][0]],self.the_md.coords[3*self.atoms[i][0]+1],self.the_md.coords[3*self.atoms[i][0]+2]],dtype=np.float)
-        p2 = np.array([self.the_md.coords[3*self.atoms[i][1]],self.the_md.coords[3*self.atoms[i][1]+1],self.the_md.coords[3*self.atoms[i][1]+2]],dtype=np.float)
-        p3 = np.array([self.the_md.coords[3*self.atoms[i][2]],self.the_md.coords[3*self.atoms[i][2]+1],self.the_md.coords[3*self.atoms[i][2]+2]],dtype=np.float)
-        p4 = np.array([self.the_md.coords[3*self.atoms[i][3]],self.the_md.coords[3*self.atoms[i][3]+1],self.the_md.coords[3*self.atoms[i][3]+2]],dtype=np.float)
+        p1 = np.array([self.the_md.coords[3*self.atom[0]],self.the_md.coords[3*self.atom[0]+1],self.the_md.coords[3*self.atom[0]+2]],dtype=np.float)
+        p2 = np.array([self.the_md.coords[3*self.atom[1]],self.the_md.coords[3*self.atom[1]+1],self.the_md.coords[3*self.atom[1]+2]],dtype=np.float)
+        p3 = np.array([self.the_md.coords[3*self.atom[2]],self.the_md.coords[3*self.atom[2]+1],self.the_md.coords[3*self.atom[2]+2]],dtype=np.float)
+        p4 = np.array([self.the_md.coords[3*self.atom[3]],self.the_md.coords[3*self.atom[3]+1],self.the_md.coords[3*self.atom[3]+2]],dtype=np.float)
         
         q12 = p2 - p1
         q23 = p3 - p2
@@ -626,12 +611,12 @@ class ABM:
         dtau2 = c_123*dtau1 - b_432*dtau4
         dtau3 = -(dtau1 + dtau2 + dtau4)
         
-        delta_xi = np.zeros(3*self.the_md.natoms)
+        delta_xi = np.zeros(3*self.natoms)
         for dim in range(0,3):
-            delta_xi[self.atoms[i][0]*3+dim] += dtau1[dim]
-            delta_xi[self.atoms[i][1]*3+dim] += dtau2[dim]
-            delta_xi[self.atoms[i][2]*3+dim] += dtau3[dim]
-            delta_xi[self.atoms[i][3]*3+dim] += dtau4[dim]
+            delta_xi[atom[0]*3+dim] += dtau1[dim]
+            delta_xi[atom[1]*3+dim] += dtau2[dim]
+            delta_xi[atom[2]*3+dim] += dtau3[dim]
+            delta_xi[atom[3]*3+dim] += dtau4[dim]
         
         return delta_xi
 
@@ -644,24 +629,43 @@ class ABM:
         returns:
             -
         '''
-        xi           = np.zeros(self.ncoords) 
-        delta_xi     = np.zeros((self.ncoords,self.the_md.natoms*3))
-        div_delta_xi = np.zeros(self.ncoords)
-       
+        xi = np.array([])
+        delta_xi     = [0 for i in range(self.ncoords)]
+        div_delta_xi = [0 for i in range(self.ncoords)]
+
         for i in range(self.ncoords):
 
-            if len(self.atoms[i]) == 3:
-                # bend angle
-                xi[i]           += self.__get_angle(i)
-                delta_xi        += self.__first_derivative_angle(i)
-                div_delta_xi[i] += 1.0/np.tan(xi[i])  
+            if self.coord[i] == 0:
+                pass
 
-            if len(self.atoms[i]) == 4:
-                # torsion angle
-                xi[i]           += self.__get_torsion(i)
-                delta_xi[i]     += self.__first_derivative_torsion(i)
-                div_delta_xi[i] += 0.0  
-               
+            elif self.coord[i] == 1:
+                x = self.the_md.coords[0]
+                xi = np.append(xi, x)
+                delta_xi[i] += np.array([1,0])
+
+            elif self.coord[i] == 2:
+                y = self.the_md.coords[1]
+                xi = np.append(xi, y)
+                delta_xi[i] += np.array([0,1])
+
+            elif self.coord[i] == 3:
+                x = self.the_md.coords[0]
+                y = self.the_md.coords[1]
+                xi = np.append(xi, x + y)
+                delta_xi[i] += np.array([1,1])
+
+            elif self.coord[i] == 4:
+                x = self.the_md.coords[0]
+                y = self.the_md.coords[1]
+                xi = np.append(xi, x/4.0 + y)
+                delta_xi[i] += np.array([0.25,1])
+
+            elif self.coord[i] == 5:
+                x = self.the_md.coords[0]
+                xi = np.append(xi, 1.0/x)
+                delta_xi[i] += np.array([-1.0/(x*x),0])
+                div_delta_xi[i] -= 2*x
+
             else:
                 print("reaction coordinate not implemented!")
                 sys.exit(0)
@@ -686,20 +690,6 @@ class ABM:
         
         return binX
 
-    # -----------------------------------------------------------------------------------------------------
-    def __diff_angles(self, a, b):
-        '''difference of two angles in range (-pi,pi)
-
-        args:
-            a               (double, -, angle in rad)
-            b               (double, -, angle in rad)
-        returns:
-            diff            (double, -, -pi <= diff <= pi)
-        ''' 
-        diff = a - b
-        if diff < -np.pi:  diff += 2*np.pi
-        elif diff > np.pi: diff -= 2*np.pi
-        return diff
 
     # -----------------------------------------------------------------------------------------------------
     def __get_metaD_bias(self, xi, bink, height, update_int, step, WT_dT, WT, grid):
@@ -728,13 +718,11 @@ class ABM:
                 if WT == True:
                     w *= np.exp(-self.metapot[bink[1],bink[0]]/(kB_a*WT_dT))
         
-                for i in range(self.nbins_per_dim[0]):
-                    dx = self.__diff_angles(self.grid[0][i], xi[0])
-                    if abs(dx) <= 3*self.variance[0]:
-                        bias_factor = w * np.exp(-(dx*dx)/(2.0*self.variance[0]))
-
-                        self.metapot[0,i] += bias_factor
-                        self.bias[0][0,i] -= bias_factor * dx/self.variance[0]
+                dx = self.grid[0] - xi[0]
+                bias_factor = w * np.exp(-np.power(dx,2.0)/(2.0*self.variance[0]))
+                 
+                self.metapot += bias_factor
+                self.bias[0] -= bias_factor.T * dx.T/self.variance[0]
 
             bias = [self.bias[0][bink[1],bink[0]]]
  
@@ -746,19 +734,21 @@ class ABM:
                 if WT == True:
                     w *= np.exp(-self.metapot[bink[1],bink[0]]/(kB_a*WT_dT))
 
+                dx = self.grid[0] - xi[0]
+                dy = self.grid[1] - xi[1]
+    
                 for i in range(self.nbins_per_dim[1]):
-                    dy = self.__diff_angles(self.grid[1][i], xi[1])
-                    if abs(dy) <= 3*self.variance[1]:
+                    if abs(dy[i]) <= 3*self.variance[1]:
                         for j in range(self.nbins_per_dim[0]):
-                            dx = self.__diff_angles(self.grid[0][j], xi[0])
-                            if abs(dx) <= 3*self.variance[0]:
-                                p1 = (dx*dx)/self.variance[0]  
-                                p2 = (dy*dy)/self.variance[1]
+                            if abs(dx[j]) <= 3*self.variance[0]:
+    
+                                p1 = (dx[j]*dx[j])/self.variance[0]  
+                                p2 = (dy[i]*dy[i])/self.variance[1]
                                 gauss = np.exp(-(p1+p2)/2.0)
             
                                 self.metapot[i,j] += w * gauss
-                                self.bias[0][i,j] -= w * gauss * dx/self.variance[0]
-                                self.bias[1][i,j] -= w * gauss * dy/self.variance[1]
+                                self.bias[0][i,j] -= w * gauss * dx[j]/self.variance[0]
+                                self.bias[1][i,j] -= w * gauss * dy[i]/self.variance[1]
                 
             bias = [self.bias[0][bink[1],bink[0]],self.bias[1][bink[1],bink[0]]] 
 
@@ -779,16 +769,16 @@ class ABM:
                 bias = [0.0]
                 w0 = height/H_to_kJmol
 
-                for ii, val in enumerate(self.center):
-                    dx = self.__diff_angles(val,xi[0])                   
-                    if abs(dx) <= 3*self.variance[0]:         	
+                dx = self.center-xi[0]                     
+                for ii, val in enumerate(dx):
+                    if abs(val) <= 3*self.variance[0]:         	
 
                         w = w0
                         if WT == True:
                             w *= np.exp(-bias_factor/(kB_a*WT_dT))
-
-                        bias_factor += w * np.exp(-(dx*dx)/(2.0*self.variance[0]))
-                        bias[0]     += bias_factor * dx/self.variance[0]
+                        
+                        bias_factor += w * np.exp(-(val*val)/(2.0*self.variance[0]))
+                        bias[0]     += bias_factor * val/self.variance[0]
             
             else:
                 # 2D
@@ -803,23 +793,23 @@ class ABM:
                 bias = [0.0,0.0] 
 
                 w0 = height/H_to_kJmol
+                dx = self.center_x - xi[0]
+                dy = self.center_y - xi[1]               
+ 
                 for i in range(len(dx)):
-                    dx = self.__diff_angles(self.center_x[i], xi[0])
-                    if abs(dx[i]) <= 3*self.variance[0]:
-                        dy = self.__diff_angles(self.center_y[i], xi[1])          
-                        if abs(dy[i]) <= 3*self.variance[1]:
+                    if abs(dx[i]) <= 3*self.variance[0] and abs(dy[i]) <= 3*self.variance[1]:
+                            
+                        w = w0
+                        if WT == True:
+                            w *= np.exp(-bias_factor/(kB_a*WT_dT))
+                        
+                        exp1  = (dx[i]*dx[i])/self.variance[0]  
+                        exp2  = (dy[i]*dy[i])/self.variance[1]
+                        gauss = w * np.exp(-(exp1+exp2)/2.0)
 
-                            w = w0
-                            if WT == True:
-                                w *= np.exp(-bias_factor/(kB_a*WT_dT))
-
-                            exp1  = (dx*dx)/self.variance[0]  
-                            exp2  = (dy*dy)/self.variance[1]
-                            gauss = w * np.exp(-(exp1+exp2)/2.0)
-    
-                            bias_factor += gauss
-                            bias[0]     += gauss * dx/self.variance[0]
-                            bias[1]     += gauss * dy/self.variance[1]
+                        bias_factor += gauss
+                        bias[0]     += gauss * dx[i]/self.variance[0]
+                        bias[1]     += gauss * dy[i]/self.variance[1]
         
         return bias
 
@@ -1020,7 +1010,7 @@ class ABM:
             -
         '''
         out = open(f"restart_bias.dat", "w")
-        if len(self.atoms) == 1:
+        if len(self.coord) == 1:
             for i in range(self.nbins_per_dim[0]):
                 row = (self.histogramm[0,i], self.geom_corr[0,i], self.bias[0][0,i])
                 out.write("%8d\t%14df\t%14.10f" % row)
@@ -1056,10 +1046,6 @@ class ABM:
         returns:
             -
         '''
-        self.traj  = np.degrees(self.traj)
-        if extended == True:
-            self.etraj = np.degrees(self.etraj)
- 
         if self.the_md.step == 0:
             traj_out = open("CV_traj.dat", "w")
             traj_out.write("%14s\t" % ("time [fs]"))
@@ -1090,21 +1076,15 @@ class ABM:
         if self.method == 'metaD' or self.method == 'reference':
             self.mean_force = self.bias
 
-        if self.method == 'ABF':
-            crit = self.__get_cond_avg(self.CV_crit, self.histogramm)
-
         out = open(f"bias_out.dat", "w")
-        if self.ncoords == 1:
+        if len(self.coord) == 1:
             head = ("Xi1", "Histogramm", "Bias", "dF", "geom_corr")
             out.write("%14s\t%14s\t%14s\t%14s\t%14s\n" % head)
             for i in range(self.nbins_per_dim[0]):
                 row = (self.grid[0][i], self.histogramm[0,i], self.mean_force[0][0,i], self.dF[0,i], self.geom_correction[0,i])
-                out.write("%14.6f\t%14.6f\t%14.6f\t%14.6f\t%14.6f" % row)
-                if self.method == 'ABF':
-                    out.write("\t%14.6f" % (crit[0][0,i]))
-                out.write("\n")
+                out.write("%14.6f\t%14.6f\t%14.6f\t%14.6f\t%14.6f\n" % row)
 
-        elif self.ncoords == 2:
+        elif len(self.coord) == 2:
             if self.method == 'metaD' or 'reference':
                 head = ("Xi1", "Xi1", "Histogramm", "Bias1", "Bias2", "geom_corr", "dF")
                 out.write("%14s\t%14s\t%14s\t%14s\t%14s\t%14s\t%14s\n" % head)
@@ -1120,9 +1100,6 @@ class ABM:
                     for j in range(self.nbins_per_dim[0]):
                         row = (self.grid[1][i], self.grid[0][j], self.histogramm[i,j], self.mean_force[0][i,j], self.mean_force[1][i,j], self.geom_correction[i,j])
                         out.write("%14.6f\t%14.6f\t%14.6f\t%14.6f\t%14.6f\t%14.6f\n" % row)
-                        if self.ethod == 'ABF':
-                            out.write("\t%14.6f\t%14.6f" % (crit[0][i,j], crit[1][i,j]))
-                        out.write("\n")
 
         out.close()
 
@@ -1132,13 +1109,13 @@ class ABM:
         '''
         print("###############################################################################")
         print("Initialize {m} method:".format(m=self.method))
-        for i in range(1,self.ncoords+1):
+        for i in range(1,len(self.coord)+1):
             print("\n\tMinimum CV%d:\t\t\t\t%14.6f Bohr" % (i,self.minx[i-1]))
             print("\tMaximum CV%d:\t\t\t\t%14.6f Bohr" % (i,self.maxx[i-1]))
             print("\tBinwidth CV%d:\t\t\t\t%14.6f Bohr" % (i,self.dx[i-1]))
         print("\n\tTotel number of bins:\t\t\t%14.6f" % (self.nbins))
 
-        for i in range(1,self.ncoords+1):
+        for i in range(1,len(self.coord)+1):
             if self.method == 'eABF' or self.method == 'meta-eABF':
                 print("\tSpring constant for extended variable:\t%14.6f Hartree/Bohr^2" % (self.k[i-1]))
                 print("\tfictitious mass for extended variable:\t%14.6f a.u." % (self.ext_mass[i-1]))

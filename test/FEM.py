@@ -61,22 +61,17 @@ class FEM:
         print("%30s:\t%8d" % ("Number of coefficients", self.alpha.size))
         
         # interploate gradient to control points
-        #Ix = interpolate.RectBivariateSpline(np.unique(data[:,0]), np.unique(data[:,1]), data[:,3].reshape(self.y_bins, self.x_bins))
-        #Iy = interpolate.RectBivariateSpline(np.unique(data[:,0]), np.unique(data[:,1]), data[:,4].reshape(self.y_bins, self.x_bins))
-        #self.D = np.array([Ix(self.y,self.x), Iy(self.y,self.x)])*H_in_kJmol 
-
         origD = [data[:,3].reshape(self.y_bins, self.x_bins), data[:,4].reshape(self.y_bins, self.x_bins)]
         D = [np.zeros(shape=(self.leny,self.lenx), dtype=np.float), np.zeros(shape=(self.leny,self.lenx), dtype=np.float)]
         for xy in range(2):
             D[xy][::4, ::4] = origD[xy]
-            D[xy][::4,2::4] = 0.5*D[xy][::4, :-4:4] + 0.5*D[xy][::4,4::4] 
-            D[xy][::4,1::4] = 0.5*D[xy][::4,2::4] + 0.5*D[xy][::4,:-4:4]
-            D[xy][::4,3::4] = 0.5*D[xy][::4,2::4] + 0.5*D[xy][::4, 4::4] 
-            D[xy][2::4] = 0.5*D[xy][:-4:4] + 0.5*D[xy][4::4]
-            D[xy][1::4]= 0.5*D[xy][2::4] + 0.5*D[xy][:-4:4]
-            D[xy][3::4]= 0.5*D[xy][2::4] + 0.5*D[xy][4::4] 
-        self.D = np.asarray(D)
-        self.D *= 2625.5 # converting Hartree*xi^-1 in kJ*mol^-1*xi^-1
+            D[xy][::4,2::4] = 0.5*D[xy][::4,:-4:4] + 0.5*D[xy][::4,4::4] 
+            D[xy][::4,1::4] = 0.5*D[xy][::4,2::4]  + 0.5*D[xy][::4,:-4:4]
+            D[xy][::4,3::4] = 0.5*D[xy][::4,2::4]  + 0.5*D[xy][::4,4::4] 
+            D[xy][2::4]     = 0.5*D[xy][:-4:4]     + 0.5*D[xy][4::4]
+            D[xy][1::4]     = 0.5*D[xy][2::4]      + 0.5*D[xy][:-4:4]
+            D[xy][3::4]     = 0.5*D[xy][2::4]      + 0.5*D[xy][4::4] 
+        self.D = np.asarray(D) * H_in_kJmol 
         self.D = self.D[:,:-1,:-1]
         print("%30s:\t%8d" % ("Elements in gradient matrix", self.D.size))
         
@@ -221,7 +216,8 @@ class FEM:
     
         prob_surface = np.exp(-F_surface/RT) 
         prob_surface /= prob_surface.sum()*self.dx*self.dy
-    
+        F_surface = -RT*np.log(prob_surface)       
+ 
         estim_err_x = np.abs(fitted_grad_x - self.D[0]) 
         estim_err_y = np.abs(fitted_grad_y - self.D[1]) 
          
