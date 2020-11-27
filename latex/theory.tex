@@ -1,10 +1,23 @@
-\chapter{Theory}
+\chapter{Theoretical Background}
 \label{cha:theory}
 
-\section{Statistical Thermodynamics and Free Energy}
+\section{Statistical thermodynamics and free energy differences}
 
-\section{Umbrella Sampling (US)}
-\label{sec:umbrella theory}
+The formulation of the problem of free energy estimation starts with the Hamiltonian
+\begin{equation}
+  \textbf{H}(\textbf{r})=\sum_{i=1}^{N}\frac{\textbf{p}_{i}^2}{2m_i} + U(\textbf{x}_1,...,\textbf{x}_N)
+\end{equation}
+of an arbitrary chemical system, where $\textbf{r}=(\textbf{x}_1,...,\textbf{x}_N,\textbf{p}_1,...,\textbf{p}_N)$ denotes a point in the phase space of the N-particle system of interest and $U(\textbf{x}_1,...,\textbf{x}_N)$ is the potential energy of the system given by any quantum chemical method or force field. If the canonical ensemble (an ensemble with fixed number of particles N, volume V and temperature T) of such a system is sampled, for example by means of Langevin dynamics with sufficiently soft damping and small stochastic forces, the probability distribution $\rho(\textbf{x})$ in the configuration space $\textbf{x}$ follows the Boltzmann distribution
+\begin{equation}
+  \rho(\textbf{x})=\frac{e^{-\beta U(\textbf{x})}}{\int e^{-\beta U(\textbf{x})} d\textbf{x}}=Q^{-1}e^{-\beta U(\textbf{x})}
+\end{equation}
+were $Q$ denotes the partition function and $\beta=(k_B T)^{-1}$ the inverse temperature, $k_B$ is the Boltzmann constant. The partition function is the central quantity of statistical thermodynamics, relating macroscopic thermodynamic quantities to the microscopic details of a system. The free energy difference between two states A and B is defined by the ratio of the corresponding partition functions $Q_A$ and $Q_B$.
+\begin{equation}
+  A = -\beta^{-1}\ln \frac{Q_A}{Q_B}
+\end{equation}
+This immediately shows that the challenge of calculating free energies really consists in exploring the configuration space of a system such that relevant states are adequately sampled.
+
+
 
 \section{Adaptive Biasing Methods}
 \label{sec:adaptive biasing}
@@ -153,3 +166,5 @@ which is called "Corrected z-averaged restraint" (CZAR) and can be calculated nu
 
 \subsection{Meta-eABF}
 \label{sec:meta-eABF}
+
+\section{Standard vs geometric free energy}
