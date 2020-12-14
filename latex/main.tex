@@ -62,6 +62,7 @@
 \usepackage{braket}
 \usepackage{algorithm}
 \usepackage{algorithmic}
+\usepackage{csquotes}
 
 \usepackage[
 	backend=biber,
@@ -289,6 +290,11 @@
 
 	%\include{introduction}
 	\include{theory}
+
+	\include{comp_details}
+
+	\include{results}
+
 	\appendix                     % Anhang
 	\backmatter
 
@@ -299,9 +305,8 @@
 	\listoftables
 	\listoffigures
 
-%    \nocite{*}								 % auch Quellen die nicht verwendet wurden tauchen in Literaturverzeichnis auf
+%   \nocite{*}								 % auch Quellen die nicht verwendet wurden tauchen in Literaturverzeichnis auf
 	\inputencoding{utf8}
 	\printbibliography[title=Bibliography]   % gibt Literaturverzeichnis aus
-
 
 \end{document}
