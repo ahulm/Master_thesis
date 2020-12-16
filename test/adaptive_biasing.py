@@ -89,6 +89,8 @@ class ABM:
         self.dx      = np.array([item[4] for item in ats])
 
         self.atoms = [[] for i in range(self.ncoords)]
+        self.is_angle = [False for i in range(self.ncoords)]
+
         for i in range(self.ncoords):
 
             if hasattr(ats[i][1], "__len__"):
@@ -101,7 +103,8 @@ class ABM:
                 self.atoms[i].append(ats[i][1]-1)
       
 	    # degree to rad 
-            if self.CV[i] == 'angle' or self.CV[i] == 'torsion':
+            if self.CV[i] == 'angle' or self.CV[i] == 'torsion' or self.CV[i] == 'lin_comb_angles':
+                self.is_angle[i] = True
                 self.minx[i] = np.radians(self.minx[i])
                 self.maxx[i] = np.radians(self.maxx[i])
                 self.dx[i]   = np.radians(self.dx[i])
@@ -132,7 +135,7 @@ class ABM:
             # force constant  
             sigma = np.array([item[5] for item in ats])
             for i in range(self.ncoords):
-                if self.CV[i] == 'angle' or self.CV[i] == 'torsion':
+                if self.CV[i] == 'angle' or self.CV[i] == 'torsion' or self.CV[i] == 'lin_comb_angles':
                     sigma[i] = np.radians(sigma[i])
         
             self.k = (kB_a*self.the_md.target_temp) / (sigma*sigma)
@@ -172,7 +175,7 @@ class ABM:
 
                 self.variance = np.array([item[5 if method == 'metaD' else 7] for item in ats])
                 for i in range(self.ncoords):
-                    if self.CV[i] == 'angle' or self.CV[i] == 'torsion':
+                    if self.CV[i] == 'angle' or self.CV[i] == 'torsion' or self.CV[i] == 'lin_comb_angles':
                         self.variance[i] = np.radians(self.variance[i])
                     
                 self.abfforce = np.copy(self.bias)
@@ -183,14 +186,16 @@ class ABM:
            
             self.variance = np.array([item[5 if method == 'metaD' else 7] for item in ats])
             for i in range(self.ncoords):
-              if self.CV[i] == 'angle' or self.CV[i] == 'torsion':
+              if self.CV[i] == 'angle' or self.CV[i] == 'torsion' or self.CV[i] == 'lin_comb_angles':
                   self.variance[i] = np.radians(self.variance[i])
                     
             self.metapot  = np.zeros((self.nbins_per_dim[1],self.nbins_per_dim[0]), dtype=np.float64)
        
         else:
-            print('\nEnhanced sampling method not implemented!')
-            print('Available keywords: reference, ABF, eABF, metaD, default: meta-eABF.')
+            print("\n----------------------------------------------------------------------")
+            print("ERROR: Invalid keyword in definition of adaptove biasing method!")
+            print('Available: reference, ABF, eABF, metaD, default: meta-eABF.')
+            print("-----------------------------------------------------------------------")
             sys.exit(1)
 
         self.__print_parameters()
@@ -215,8 +220,10 @@ class ABM:
 
             bink = self.__get_bin(xi)
             self.histogramm[bink[1],bink[0]] += 1
-            
             self.geom_corr[bink[1],bink[0]] += self.__get_gradient_correction(delta_xi)
+
+            for i in range(self.ncoords):
+                self.CV_crit[i][bink[1],bink[0]] += np.dot(delta_xi[i], self.the_md.forces)         
 
         else:
             for i in range(self.ncoords):
@@ -267,7 +274,7 @@ class ABM:
 
             for i in range(self.ncoords):
 
-                self.CV_crit[i][bink[1],bink[0]] += np.dot(delta_xi, self.the_md.forces)         
+                self.CV_crit[i][bink[1],bink[0]] += np.dot(delta_xi[i], self.the_md.forces)         
 
                 # linear ramp function R(N,k)
                 Rk = 1.0 if self.histogramm[bink[1],bink[0]] > N_full else self.histogramm[bink[1],bink[0]]/N_full
@@ -334,7 +341,7 @@ class ABM:
             bias = self.__get_metaD_bias(xi, bink, gaussian_height, update_int, self.the_md.step, WT_dT, WT, grid)
             for i in range(self.ncoords):
 
-                self.CV_crit[i][bink[1],bink[0]] += np.dot(delta_xi, self.the_md.forces)         
+                self.CV_crit[i][bink[1],bink[0]] += np.dot(delta_xi[i], self.the_md.forces)         
                 self.the_md.forces += bias[i] * delta_xi[i]
         
         else:
@@ -379,7 +386,8 @@ class ABM:
         self.__propagate_extended()
 
         if (self.ext_coords <= self.maxx).all() and (self.ext_coords >= self.minx).all():
-            
+            # lambda conditioned bias        
+ 
             la_bin = self.__get_bin(xi, extended = True)
             self.histogramm[la_bin[1],la_bin[0]] += 1
              
@@ -396,6 +404,7 @@ class ABM:
                 self.ext_forces[i] += Rk * self.bias[i][la_bin[1],la_bin[0]]/self.histogramm[la_bin[1],la_bin[0]]
                   
         else:
+            # confinement of extended coordinate
 
             for i in range(self.ncoords):
 
@@ -413,15 +422,17 @@ class ABM:
                     self.ext_forces -= self.f_conf/H_to_kJmol * min_diff
         
         if (xi <= self.maxx).all() and (xi >= self.minx).all():
-            # accumulators for czar estimator
+            # xi-conditioned accumulators 
            
             bink = self.__get_bin(xi)
             self.hist_z[bink[1],bink[0]] += 1
             
-            self.CV_crit[i][bink[1],bink[0]] += np.dot(delta_xi, self.the_md.forces)         
             self.geom_corr[bink[1],bink[0]] += self.__get_gradient_correction(delta_xi)
             
             for i in range(self.ncoords):
+
+                self.CV_crit[i][bink[1],bink[0]] += np.dot(delta_xi[i], self.the_md.forces)         
+
                 dx = self.__diff_angles(self.ext_coords[i], self.grid[i][bink[i]])
                 self.force_correction_czar[i][bink[1],bink[0]] += self.k[i] * dx 
          
@@ -486,7 +497,7 @@ class ABM:
             for i in range(self.ncoords):
 
                 # harmonic coupling of extended coordinate to reaction coordinate
-                dxi                 = self.__diff_angles(self.ext_coords, xi)
+                dxi                 = self.__diff_angles(self.ext_coords[i], xi[i])
                 self.ext_forces[i]  = self.k[i] * dxi
                 self.the_md.forces -= self.k[i] * dxi * delta_xi[i]
 
@@ -507,7 +518,7 @@ class ABM:
                 self.ext_forces[i]  = self.k[i] * dxi
                 self.the_md.forces -= self.k[i] * dxi * delta_xi[i]
 
-                # confinement
+                # confinement with constant force outside of bins
                 max_diff = self.__diff_angles(self.maxx[i], self.ext_coords[i]) 
                 min_diff = self.__diff_angles(self.minx[i], self.ext_coords[i])
                 if abs(max_diff) < abs(min_diff):
@@ -518,12 +529,14 @@ class ABM:
         if (xi <= self.maxx).all() and (xi >= self.minx).all():
             
             bink = self.__get_bin(xi)
-            self.CV_crit[i][bink[1],bink[0]] += np.dot(delta_xi, self.the_md.forces)         
             self.geom_corr[bink[1],bink[0]]  += self.__get_gradient_correction(delta_xi)
 
             # accumulators for czar estimator
             self.hist_z[bink[1],bink[0]] += 1
             for i in range(self.ncoords):
+
+                self.CV_crit[i][bink[1],bink[0]] += np.dot(delta_xi[i], self.the_md.forces)         
+
                 dx = self.__diff_angles(self.ext_coords[i], self.grid[i][bink[i]])
                 self.force_correction_czar[i][bink[1],bink[0]] += self.k[i] * dx
         
@@ -577,6 +590,14 @@ class ABM:
                     delta_xi[i] += dx
                     div[i]      += 2.0/xi[i]
 
+            elif self.CV[i] == 'projected_distance':
+                     
+                    # bond distance
+                    (x, dx) = projected_distance(self, self.atoms[i])
+                    xi[i]       += x
+                    delta_xi[i] += dx
+                    div[i]      += 0.0
+
             elif self.CV[i] == 'angle':
 
                     # bend angle
@@ -593,21 +614,34 @@ class ABM:
                     delta_xi[i] += dx
                     div[i]      += 0.0  
             
-            elif self.CV[i] == 'lin_comb':
+            elif self.CV[i] == 'lin_comb_dists':
                     
-                    # linear combination of distance, angle and torsion
+                    # linear combination of distances and projeced distances
                     if self.the_md.step == 0 and self.method == 'ABF':
                         print('ERROR: Do not use linear combination of CVs with ABF, divergence not implemented!')
                         sys.exit(0)
 
-                    (x, dx) = lin_comb_CVs(self, self.atoms[i])
+                    (x, dx) = lin_comb_dists(self, self.atoms[i])
                     xi[i]       += x
                     delta_xi[i] += dx
+
+            elif self.CV[i] == 'lin_comb_angles':
+                    
+                    # linear combination of angles and dihedrals
+                    if self.the_md.step == 0 and self.method == 'ABF':
+                        print('ERROR: Do not use linear combination of CVs with ABF, divergence not implemented!')
+                        sys.exit(0)
+
+                    (x, dx) = lin_comb_dists(self, self.atoms[i])
+                    xi[i]       += x
+                    delta_xi[i] += dx
+
                               
             else:
-                print("\nError in definition of reaction coordinate!")
-                print("Invalid number of atoms or wrong keyword.")
-                print("Available keywords: distance (2 atoms), distance_groups ([[N],[N]] atoms), angle (3 atoms), torsion (4 atoms)")
+                print("\n----------------------------------------------------------------------")
+                print("ERROR: Invalid keyword in definition of collective variables!")
+                print("Available: distance, angle, torsion, lin_comb")
+                print("-----------------------------------------------------------------------")
                 sys.exit(0)
 
         return (xi, delta_xi, div)
@@ -632,17 +666,20 @@ class ABM:
 
     # -----------------------------------------------------------------------------------------------------
     def __diff_angles(self, a, b):
-        '''difference of two angles in range (-pi,pi)
+        '''returns difference of two angles in range (-pi,pi) or normal difference 
 
         args:
             a               (double, -, angle in rad)
             b               (double, -, angle in rad)
         returns:
             diff            (double, -, in rad)
-        ''' 
-        diff = a - b
-        if diff < -np.pi:  diff += 2*np.pi
-        elif diff > np.pi: diff -= 2*np.pi
+        '''
+        if self.is_angle == True: 
+            diff = a - b
+            if diff < -np.pi:  diff += 2*np.pi
+            elif diff > np.pi: diff -= 2*np.pi
+        else:
+            diff = a - b
         return diff
 
     # -----------------------------------------------------------------------------------------------------
@@ -707,8 +744,9 @@ class ABM:
             bias = [self.bias[0][bink[1],bink[0]],self.bias[1][bink[1],bink[0]]] 
 
         if grid == False:
-            # get analytic bias potential and force every step
+            # get exact bias force every step
             # can become slow in long simulations 
+            # TODO: use sorted dx for speedup          
 
             bias_factor = 0.0
             if self.ncoords == 1:
@@ -921,13 +959,14 @@ class ABM:
         self.geom_correction = kB_a * self.the_md.target_temp * grad_corr     
 
     # -----------------------------------------------------------------------------------------------------
-    def MW(self, MW_file = '../MW.dat', sync_interval = 20):
+    def MW(self, MW_file = '../MW.dat', sync_interval = 20, trial = 0):
         '''Multiple walker strategy
            metadynamic/meta-eABF has to use grid!
 
         args:
-            MW_file             (string, )
-            sync_interval       (int, )
+            MW_file             (string, path to MW buffer)
+            sync_interval       (int, intervall for sync with other walkers in steps)
+            trial               (int, counter for recursive call)
         returns:
             -
         '''
@@ -952,8 +991,6 @@ class ABM:
             # check is MW file exists
             if os.path.isfile(MW_file):
                 
-                trial = 0
-    
                 # avoid inconsitency by simultaneous access to buffer of multiple walkers
                 if os.access(MW_file, os.W_OK) == False:
     
@@ -992,7 +1029,7 @@ class ABM:
                                 self.MW_abfforce = np.copy(self.abfforce)
                     
                     else:
-                        # not yet tested!
+                        
                         MW_new = np.array([MW[:,2].reshape(self.nbins_per_dim[1],self.nbins_per_dim[0]), MW[:,3].reshape(self.nbins_per_dim[1],self.nbins_per_dim[0])])
                         self.bias = self.__MW_update(self.bias, self.MW_bias, MW_new)
                         self.MW_bias = np.copy(self.bias)
@@ -1006,15 +1043,15 @@ class ABM:
                             self.MW_metapot = np.copy(self.metapot)
     
                         elif self.method == 'eABF' or self.method == 'meta-eABF':
-                            self.hist_z = self.__MW_update(self.hist_z, self.MW_hist_z, MW[:,7].reshape(self.nbins_per_dim[1],self.nbins_per_dim[0]))
+                            self.hist_z = self.__MW_update(self.hist_z, self.MW_hist_z, MW[:,6].reshape(self.nbins_per_dim[1],self.nbins_per_dim[0]))
                             self.MW_hist_z = np.copy(self.hist_z)
     
-                            MW_new =  np.array([MW[:,8].reshape(self.nbins_per_dim[1],self.nbins_per_dim[0]), MW[:,9].reshape(self.nbins_per_dim[1],self.nbins_per_dim[0])])
+                            MW_new =  np.array([MW[:,7].reshape(self.nbins_per_dim[1],self.nbins_per_dim[0]), MW[:,8].reshape(self.nbins_per_dim[1],self.nbins_per_dim[0])])
                             self.force_correction_czar = self.__MW_update(self.force_correction_czar, self.MW_force_correction_czar, MW_new)
                             self.MW_force_correction_czar = np.copy(self.force_correction_czar)
     
                             if self.method == 'meta-eABF':
-                                MW_new =  np.array([MW[:,10].reshape(self.nbins_per_dim[1],self.nbins_per_dim[0]), MW[:,11].reshape(self.nbins_per_dim[1],self.nbins_per_dim[0])])
+                                MW_new =  np.array([MW[:,9].reshape(self.nbins_per_dim[1],self.nbins_per_dim[0]), MW[:,10].reshape(self.nbins_per_dim[1],self.nbins_per_dim[0])])
                                 self.abfforce = self.__MW_update(self.abfforce, self.MW_abfforce, MW_new)
                                 self.MW_abfforce = np.copy(self.abfforce)
                     
@@ -1033,8 +1070,7 @@ class ABM:
 
                     # try again
                     time.sleep(0.1)
-                    self.MW(MW_file)
-                    tiral += 1
+                    self.MW(MW_file, sync_interval=sync_interval, trial=trial+1)
                  
                 else:
                     print('Failed to sync bias with other walkers')
@@ -1122,7 +1158,7 @@ class ABM:
             for i in range(self.nbins_per_dim[1]):
                 for j in range(self.nbins_per_dim[0]):
                     row = (self.histogramm[i,j], self.geom_corr[i,j], self.bias[0][i,j], self.bias[1][i,j], self.CV_crit[0][0,i], self.CV_crit[1][0,i])
-                    out.write("%14.10f\t%14.10f\t%14.10f\t%14.10ft\t%14.10f\t%14.10f" % row)
+                    out.write("%14.10f\t%14.10f\t%14.10f\t%14.10f\t%14.10f\t%14.10f" % row)
                     if self.method == 'metaD':
                         out.write('\t%14.10f' % (self.metapot[i,j]))
                     elif self.method == 'eABF' or self.method == 'meta-eABF':
@@ -1143,7 +1179,7 @@ class ABM:
             -
         '''
         for i in range(self.ncoords):
-            if self.CV[i] == 'angle' or self.CV[i] == 'torsion':
+            if self.CV[i] == 'angle' or self.CV[i] == 'torsion' or self.CV[i] == 'lin_comb_angles':
                 self.traj  = np.degrees(self.traj)
                 if extended == True:
                     self.etraj = np.degrees(self.etraj)
@@ -1182,7 +1218,7 @@ class ABM:
         
         grid = np.copy(self.grid)
         for i in range(self.ncoords):
-            if self.CV[i] =='angle' or self.CV[i] == 'torsion': 
+            if self.CV[i] =='angle' or self.CV[i] == 'torsion' or self.CV[i] == 'lin_comb_angles': 
                 grid[i] = np.degrees(self.grid[i])
         
         out = open(filename, "w")
@@ -1197,7 +1233,7 @@ class ABM:
         elif self.ncoords == 2:
             if self.method == 'metaD' or 'reference':
                 head = ("Xi1", "Xi0", "CV_crit1", "CV_crit0", "Histogramm", "Bias1", "Bias0", "geom_corr", "dF")
-                out.write("%14s\t%14s\t%14\t%14s\t%14s\t%14s\t%14s\t%14s\t%14s\n" % head)
+                out.write("%14s\t%14s\t%14s\t%14s\t%14s\t%14s\t%14s\t%14s\t%14s\n" % head)
                 for i in range(self.nbins_per_dim[1]):
                     for j in range(self.nbins_per_dim[0]):
                         row = (grid[1][i], grid[0][j], crit[1][i,j], crit[0][i,j], self.histogramm[i,j], self.mean_force[1][i,j], self.mean_force[0][i,j], self.geom_correction[i,j], self.dF[i,j])
@@ -1222,7 +1258,7 @@ class ABM:
         '''
         print("\nInitialize CV's for {m}:".format(m=self.method))
         for i in range(self.ncoords):
-            if self.CV[i] == 'angle' or self.CV[i] == 'torsion':
+            if self.CV[i] == 'angle' or self.CV[i] == 'torsion' or self.CV[i] == 'lin_comb_angles':
                 print("\n\tMinimum CV%d:\t\t%14.6f rad" % (i,self.minx[i]))
                 print("\tMaximum CV%d:\t\t%14.6f rad" % (i,self.maxx[i]))
                 print("\tBinwidth CV%d:\t\t%14.6f rad" % (i,self.dx[i]))
@@ -1237,7 +1273,7 @@ class ABM:
         if self.method == 'eABF' or self.method == 'meta-eABF':
             print("\nInitialize extended Lagrangian:")
             for i in range(self.ncoords):
-                if self.CV[i] == 'angle' or self.CV[i] == 'torsion':
+                if self.CV[i] == 'angle' or self.CV[i] == 'torsion' or self.CV[i] == 'lin_comb_angles':
                     print("\n\tspring constant:\t%14.6f Hartree/rad^2" % (self.k[i]))
                 else:
                     print("\n\tspring constant:\t%14.6f Hartree/A^2" % (self.k[i]))
