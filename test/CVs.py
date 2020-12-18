@@ -87,9 +87,11 @@ def projected_distance(self, atoms):
     # get gradient
     w1 = mass_weights(self.the_md, m1, atoms[0])
     w2 = mass_weights(self.the_md, m2, atoms[1])
+    #w3 = mass_weights(self.the_md, m3, atoms[2])
 
     grad_xi =- np.dot(e, w1)
     grad_xi += np.dot(e, w2)
+    #grad_xi += np.dot(e, 0.5*w3)
 
     return (xi, grad_xi)
 

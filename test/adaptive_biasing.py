@@ -201,11 +201,12 @@ class ABM:
         self.__print_parameters()
 
     # -----------------------------------------------------------------------------------------------------
-    def ref(self, write_traj=True):
+    def ref(self, write_output=True, write_traj=True):
         '''get unbiased histogramm along CVs 
            can be used for equilibration of molecules prior to ABM simulation           
 
         args:
+            write_output    (bool, True, write free energy to bias_out.dat)
             write_traj      (bool, True, write trajectory to CV_traj.dat)
 
         returns:
@@ -236,16 +237,17 @@ class ABM:
                 else:
                     self.the_md.forces -= self.f_conf/H_to_kJmol * min_diff * delta_xi[i]
 
-        if self.the_md.step%self.out_freq == 0:
+        if self.the_md.step%self.out_freq:
             # write output
 
             if write_traj == True:
                 self.write_traj(xi)
             
-            self.dF = -kB_a*self.the_md.target_temp*np.log(self.histogramm, out=np.zeros_like(self.histogramm),where=(self.histogramm!=0))
-            self.__get_geom_correction()
-            self.write_output()
-            self.write_restart()
+            if write_output == True:
+                self.dF = -kB_a*self.the_md.target_temp*np.log(self.histogramm, out=np.zeros_like(self.histogramm),where=(self.histogramm!=0))
+                self.__get_geom_correction()
+                self.write_output()
+                self.write_restart()
 
         self.timing = time.perf_counter() - start
         
@@ -640,7 +642,7 @@ class ABM:
             else:
                 print("\n----------------------------------------------------------------------")
                 print("ERROR: Invalid keyword in definition of collective variables!")
-                print("Available: distance, angle, torsion, lin_comb")
+                print("Available: distance, angle, torsion, lin_comb_dists, lin_comb_angles")
                 print("-----------------------------------------------------------------------")
                 sys.exit(0)
 
