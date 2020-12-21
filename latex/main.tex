@@ -63,6 +63,19 @@
 \usepackage{algorithm}
 \usepackage{algorithmic}
 \usepackage{csquotes}
+\usepackage{stix}           % changes all fonts !
+
+% use Tikz to draw graphics
+\usepackage{tikz}
+\usetikzlibrary{shapes,arrows}
+\tikzstyle{decision} = [diamond, draw, fill=red!20,
+text width=4em, text badly centered, node distance=1.8cm, inner sep=2pt]
+\tikzstyle{block} = [rectangle, draw, fill=blue!20,
+text width=10em, text centered, rounded corners, node distance=1.4cm, minimum height=2em]
+\tikzstyle{line} = [draw, -latex']
+\tikzstyle{cloud} = [draw, circle, text centered, fill=red!20, node distance=4cm,
+minimum height=1.5em, text width=2em]
+
 
 \usepackage[
 	backend=biber,
@@ -275,7 +288,8 @@
 	\pagenumbering{Roman}         % romanische Nummerierung für die Deckblätter, Inhaltsverzeichnis und co.
 
 	%\include{deckblatt_teil1}     % Deckblatt Titel
-	%\include{symbols}
+	%\include{deckblatt_teil2}
+	\include{symbols}
 
 	\setheadsepline{0.5pt}        % Dicke der Trennlinie Kopfzeile - Text
 
@@ -290,14 +304,12 @@
 
 	%\include{introduction}
 	\include{theory}
-
-	\include{comp_details}
-
-	\include{results}
-
+  %\include{comp_details}
+	%\include{results}
+  \include{appendix}
 	\appendix                     % Anhang
-	\backmatter
 
+	\backmatter
 	\pagenumbering{Roman}                    % für letzte Verzeichnisse wieder romanische Nummerierung
 	\sectionnumbering{Roman}
 	\setcounter{page}{\theromanPagenumber}   % setzt die aktuelle Seitenzahl von vorne für die romanische Nummerierung fest

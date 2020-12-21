@@ -14,9 +14,13 @@ of an arbitrary chemical system, where $(\textbf{x},\textbf{p})$ denotes a point
   \rho(\textbf{x})=\frac{e^{-\beta U(\textbf{x})}}{\int e^{-\beta U(\textbf{x})} d\textbf{x}}=Z^{-1}e^{-\beta U(\textbf{x})}
   \label{eq:boltzmann}
 \end{equation}
-were $Z$ denotes the partition function and $\beta=(k_B T)^{-1}$ the inverse temperature with Boltzmann constant $k_B$.
+were $Z$ denotes the partition function and $\beta=(k_B T)^{-1}$ the inverse temperature with Boltzmann constant $k_B$.\autocite{chipot2007free}
 %By acting as normalization constant to ensure $\int\rho(x)dx=1$, the partition function is the central quantity of statistical thermodynamics, relating macroscopic thermodynamic quantities to the microscopic details of a system.
-In this work we will focus on alchemical transformations, $A\longrightarrow B$, which are represented by a small set of collective variables (CV's) $(\xi_1(\textbf{x}) : \mathbb{R} ^{3N} \to \mathbb{R}, ..., \xi_n(\textbf{x}))$, that are sufficient to distinguish between key states of interest.
+In this work we will focus on alchemical transformations, $A\longrightarrow B$, which are represented by a small set of collective variables (CV's)
+\begin{equation}
+ \xi_1(\textbf{x}) : \mathbb{R} ^{3N} \to \mathbb{R}, ..., \xi_n(\textbf{x}) : \mathbb{R} ^{3N} \to \mathbb{R}
+\end{equation}
+that are sufficient to distinguish between key states of interest.
 In this framework the probability distribution can be expressed by
 \begin{equation}
   \rho(\xi)=\int \delta[\xi-\xi(\textbf{x})]\rho(\textbf{x})=\braket{\delta [\xi -\xi(\textbf{x})]}_\xi
@@ -27,7 +31,7 @@ where $\braket{}_\xi$ denotes the $\xi$-conditioned marginal distribution and th
   A(\xi) = -\beta^{-1}\ln \rho(\xi)
   \label{eq:free energy}
 \end{equation}
-Note that the shape of the obtained free energy surface (FES) is not gauge invariant against the choice of CV function $\xi$. This is, however, no concern in the calculation of free energy differences, because the CV dependent feature is integrated out to obtain the probability that the system occupies state A or B, such that $p_A + p_B = 1$.\autocite{bal2020free}
+Note that the shape of the obtained free energy surface (FES) is not gauge invariant against the choice of CV function $\xi$. This is, however, no concern in the calculation of free energy differences, because the CV dependent feature is integrated out to obtain the probability that the system occupies state A or B.\autocite{bal2020free}
 \begin{equation}
   \Delta A_{A\rightarrow B} = -\beta^{-1}\ln \frac{\int_B \rho(\xi)d\xi}{\int_A \rho(\xi)d\xi}=-\beta^{-1}\ln \frac{p_B}{p_A}
   \label{eq:free energy diff}
@@ -38,11 +42,14 @@ However, in computer simulations the direct phase-space integrals used in equati
   \label{eq:ergodic}
 \end{equation}
 In practice, $P(\xi)$ is approximated as a histogram along the reaction coordinate with bins of fixed size.
-Assuming that the system at hand behaves \textit{ergodic}, i.e. every point in phase space is visited during a infinitely long simulation, the ensemble average $\rho(\xi)$ converges to the time average $P(\xi)$ for long simulations. However, transitions of high energy barriers during chemical reactions are typically rare events, that might happen on timescales far beyond what is feasible to compute. Therefore most processes, for example in biochemical context, are \textit{quasinonergodic}. The problem of calculating accurate free energy differences hence really consists in adequate sampling of regions with high free energy (transition states) along the reaction coordinate.
+Assuming that the system at hand behaves \textit{ergodic}, i.e. every point in phase space is visited during a infinitely long simulation, the ensemble average $\rho(\xi)$ converges to the time average $P(\xi)$ of one system.
+However, transitions of high energy barriers during chemical reactions are typically rare events, that might happen on timescales far beyond what is feasible to compute. Therefore most processes, for example in biochemical context, are \textit{quasinonergodic}.
+The problem of calculating accurate free energy differences hence really consists in adequate sampling of regions with high free energy (transition states) along the reaction coordinate.
 
 For this purpose several \textit{enhanced sampling} methods were developed.\autocite{jiang2010free, sugita1999replica,den2000thermodynamic, kastner2011umbrella, ciccotti2005blue, barducci2008well}
-In this work we will focus on CV-based approaches, that are based on altering the potential energy in a way, that increases the time spent in a certain region of configuration space during a simulation. One of the oldest and simplest methods to achieve the same is \textit{Umbrella Sampling} (US)\autocite{kastner2011umbrella}, which will be introduced in the following section.
-The main focus of this work lies on \textit{Adaptive Biasing Methods} (ABM)\autocite{barducci2011metadynamics,comer2015adaptive, lesage2017smoothed}, which aim for uniform sampling along the reaction coordinate by an history dependent biasing term (section \ref{sec:adaptive biasing}).
+In this work we will focus on CV-based approaches, that alter the potential energy of the sampled system in a way, that increases the time spent in a important regions of configuration space during a simulation. One of the oldest and simplest methods to achieve the same is \textit{Umbrella Sampling} (US)\autocite{kastner2011umbrella}, which will be introduced in the following section.
+The main focus of this work lies on \textit{Adaptive Biasing Methods} \autocite{barducci2011metadynamics,comer2015adaptive, lesage2017smoothed}, which aim for uniform sampling along the reaction coordinate by an history dependent biasing term (section \ref{sec:adaptive biasing}).
+\newpage
 
 \section{Umbrella Sampling (US)}
 In its most common form US introduces a fixed harmonic bias potentials of the form
@@ -206,7 +213,7 @@ Figure~\ref{fig:ABF} shows a numerical example for the flattening of the reactio
 \end{figure}
 
 For 1D reaction coordinates the unbiased free energy difference $\Delta A$ can be trivially obtained from $\overline{F}$ with any numerical integration scheme (e.g. Simpson's rule).
-However, this is not true for multidimensional reaction coordinates, because $\overline{F}$ is no conservative force due to statistical errors. With simple integration the result would therefore depend on the integration path, which is physically wrong. This problem can be avoided by using the finite element method (FEM). For this purpose tent functions $B_l$ are used to approximate $A(\xi)$:\autocite{darve2008adaptive}
+However, this is not true for multidimensional reaction coordinates, because $\overline{F}$ is no conservative force due to statistical errors. With simple integration the result would therefore depend on the integration path, which is physically wrong. This problem can be avoided by using the \textit{finite element method} (FEM). For this purpose tent functions $B_l$ are used to approximate $A(\xi)$:\autocite{darve2008adaptive}
 \begin{equation}
   A(\xi) = \sum_l \alpha_l B_l(\xi)
 \end{equation}
@@ -250,7 +257,7 @@ with projector $Q^i$ given by the orthonormal basis $\{\hat{n}|_{j}^{i}(\textbf{
 \end{equation}
 Replacing the inverse gradient by vectorfield $\textbf{v}_i$, expression \ref{eq:instforce old} finally reduces to:
 \begin{equation}
-  F(\xi_i,\textbf{x}) = -\nabla V(\textbf{x}) \cdot \textbf{v}_i(\textbf{x}) + \beta^{-1} \nabla \cdot \textbf{v}_i(\textbf{x}) \label{eq:inst ABF force}
+  F(\xi_i,\textbf{x}) = -\nabla U(\textbf{x}) \cdot \textbf{v}_i(\textbf{x}) + \beta^{-1} \nabla \cdot \textbf{v}_i(\textbf{x}) \label{eq:inst ABF force}
 \end{equation}
 but still involves the calculation of second derivatives in the form of the divergence of vector fields $\textbf{v}_i$.\autocite{comer2015adaptive} Analytic expressions for bend angles and torsion angles, used in the present work, are given in the appendix. However, for complicated CV's like torsion angles orthogonalization via equation \ref{eq:ortho v} becomes exceedingly tedious and impractical, significantly limiting the applicability of ABF for multidimensional reaction coordinates.
 
@@ -272,6 +279,7 @@ Sampling the extended system in thermal equilibrium gives the following Boltzman
 The bias on $\lambda$ is the running average over the spring force in $\lambda$-bin k:
 \begin{equation}
   \overline{F}(\lambda_{i}, k) = \frac{\partial A^{k}(\lambda_{i})}{\partial \lambda_i} = \frac{1}{N_{Step}^{k}\sigma_i^2} \sum_{\mu=1}^{N_{Step}^{k}} (\lambda_{i,\mu}^{k}-\xi_{i,\mu}^{k})
+  \label{eq:eABF bias}
 \end{equation}
 Note that the instantaneous force estimate in each step no longer depends on the all atomic coordinates $\textbf{x}$ like in normal ABF (cf. equation \ref{eq:inst ABF force}), but only on ($\lambda_i - \xi_i$).
 This has the advantageous side effect, that the noise in $\overline{F}$ can be reduced significantly and faster convergence of $\overline{F}$ can be expected, if $\sigma^2$ is well chosen.\autocite{lesage2017smoothed} Specifically, the mean square fluctuations of the spring force is given by $\sigma_F \propto (\beta\sigma)^{-1}$, which shows that the variance of $\overline{F}$ is smaller for higher values of $\sigma$.
@@ -284,11 +292,81 @@ The naive approach is to approximate $A(\xi_i)$ with $A^k(\lambda_i)$, which can
 However, this will only produce unbiased results in the tight coupling limit for $\sigma \rightarrow 0$, where standard ABF is recovered.
 
 However, as we saw earlier, it is advantageous to use higher values of $\sigma$.
-An asymptotically unbiased estimator of the free energy can be derived by correcting the free energy gradient obtained from the eABF-biased distribution $\tilde{\rho}(z)$ with the average biasing force on z
+An asymptotically unbiased estimator of the free energy can be derived by correcting the free energy gradient obtained from the eABF-biased distribution $\tilde{\rho}(\xi)$ with the average biasing force on $\xi$
 \begin{equation}
-  \frac{\partial A(z)}{\partial z_i} = -\beta^{-1}\frac{\partial \ln \tilde{\rho}(z)}{\partial z_i} + k(\braket{\lambda_i}_{z}-z_{i}) \label{eq:CZAR}
+  \frac{\partial A(\xi_i)}{\partial \xi_i} = -\beta^{-1}\frac{\partial \ln \tilde{\rho}(\xi_i)}{\partial \xi_i} + k(\braket{\lambda_i}_{\xi_i}-\xi_{i}) \label{eq:CZAR}
 \end{equation}
-which is called "Corrected z-averaged restraint" (CZAR) and can be calculated on-the-fly during the simulation at little extra cost by introducing two additional accumulators for $\tilde{\rho}(z)$ and $k(\braket{\lambda_i}_{z}-z_{i})$ which are only joined at output times.\autocite{lesage2017smoothed}
+which is called \textit{Corrected z-averaged restraint} (CZAR) and can be calculated on-the-fly during the simulation at little extra cost by introducing two additional accumulators for $\tilde{\rho}(z)$ and $k(\braket{\lambda_i}_{z}-z_{i})$ which are only joined at output times.\autocite{lesage2017smoothed}
+
+\begin{figure}[H]
+   \caption{Schematic flowchart of the eABF algorithm}
+
+        \centering
+        \begin{tikzpicture}[minimum size=5mm,node distance=4cm and 7cm,>=stealth,bend angle=45,auto]
+        \node [block] (xi) {$\xi \leftarrow f(\textbf{x})$};
+        \node [block, below of=xi] (langevin) {Langevin dynamics of extended system};
+        \node [block, below of=langevin,yshift=-0.5cm] (F_ext) {add harmonic force of extended system to QM/MM forces};
+
+        \node [decision, below of=F_ext, yshift=-1cm] (decide_lambda) {$\xi_{min}\leq \lambda \leq \xi_{max}$};
+
+        \node [block, below of=decide_lambda,xshift=-3cm] (la_bin) {$k_\lambda = \lfloor \frac{\lambda - \xi_{min}}{\Delta \xi} \rfloor$};
+        \node [block, below of=la_bin] (la_hist) {$\tilde{\rho}_\lambda(k_\lambda) \pluseqq 1$};
+        \node [block, below of=la_hist] (R) {$k_\lambda = f(k_\lambda)$ (eq. \ref{eq:ramp})};
+        \node [block, below of=R] (F_B1) {$F_B(k_\lambda)\pluseqq \frac{1}{\sigma^2}(\lambda-\xi)$};
+        \node [block, below of=F_B1] (F_B2) {$F(\textbf{x},\lambda) \pluseqq \frac{F_B(k_\lambda)}{\tilde{\rho}_\lambda(k_\lambda)}\nabla\lambda$};
+
+        \node [block, right of=R,xshift=4cm] (conf1) {confine $\lambda$ to range of interest};
+
+        \node [decision, below of=F_B2,xshift=3cm] (decide_xi) {$\xi_{min}\leq \xi \leq \xi_{max}$};
+
+        \node [block, below of=decide_xi,xshift=-3cm] (xi_bin) {$k_\lambda = \lfloor \frac{\xi - \xi_{min}}{\Delta \xi} \rfloor$};
+        \node [block, below of=xi_bin] (xi_hist) {$\tilde{\rho}_\xi(k_\xi) \pluseqq 1$};
+        \node [block, below of=xi_hist] (F_corr) {$F_{corr}(k_\xi) \pluseqq \frac{1}{\sigma^2}(\lambda-\xi)$};
+
+        \node [block, right of=xi_hist,xshift=4cm] (conf2) {confine $\xi$ to range of interest};
+
+        \node [block,below of=F_corr,xshift=3cm] (MD1) {Finish Langevin dynamics of extended system};
+
+        \node [decision, below of=MD1,xshift=3cm] (output) {$t=t_{out}$};
+        \node [block, left of=output,xshift=-4cm] (CZAR) {calculate CZAR according to eq. \ref{eq:CZAR}};
+        \node [block, left of=CZAR,xshift=-4cm] (out) {write output};
+
+        \node [block, left of=R,xshift=-4cm] (MD2) {MD step of system according to Langevin dynamics};
+
+        \path [line] (xi) -- (langevin);
+        \path [line] (langevin) -- (F_ext);
+        \path [line] (F_ext) -- (decide_lambda);
+
+        \draw [->] (decide_lambda) -- (la_bin);
+        \path [line] (la_bin) -- (la_hist);
+        \path [line] (la_hist) -- (R);
+        \path [line] (R) -- (F_B1);
+        \path [line] (F_B1) -- (F_B2);
+
+        \draw [->] (decide_lambda) -- (conf1);
+
+        \path [line] (F_B2) -- (decide_xi);
+        \path [line] (conf1) -- (decide_xi);
+
+        \draw [->] (decide_xi) -- (xi_bin);
+        \path [line] (xi_bin) -- (xi_hist);
+        \path [line] (xi_hist) -- (F_corr);
+
+        \draw [->] (decide_xi) -- (conf2);
+
+        \path [line] (F_corr) -- (MD1);
+        \path [line] (conf2) -- (MD1);
+
+        \path [line] (MD1) -- (output);
+        \path [line] (output) -- (CZAR);
+        \path [line] (CZAR) -- (out);
+
+        \draw[->] (MD1) -| (MD2);
+        \draw[->] (MD2) |- (xi);
+
+        \end{tikzpicture}
+        \label{pic:eABF flowchart}
+\end{figure}
 
 The CZAR estimator is able to recover the unbiased free energy derivative only from time trajectory $(z_i,\lambda_i)$ of the extended system, independent of the bias on $\lambda_i$, as long as the simulation is in thermal equilibrium. It is therefore possible to use any arbitrary bias on $\lambda_i$, for example using metadynamics on the extended variable (eMtd, eWTM).
 One particular useful choice for $\overline{F}(\lambda_{i}, k)$ is to combine the repulsive MtD or WTM potential with the eABF bias, an idea the authors figuratively described with 'Shaving Barriers, and Flooding Valleys'.\autocite{fu2018zooming}
@@ -303,13 +381,55 @@ The full MtD-eABF and WTM-eABF bias terms read
 with $U_{B}^{MtD}$ and $U_{B}^{WTM}$ given by equations \ref{eq:U_mtD} and \ref{eq:WTM}.
 The relative contributions of the eABF and MtD/WTM term will fluctuate over the course of a simulation, but the sum of both will eventually converge. However, accurate evaluation of $F_B$ is not even required, because it only enhances sampling of the reaction coordinate and the true PMF is obtained independently from CZAR.
 
-\section{Obtaining reaction rate constants from biased simulations}
-\label{sec:A_geom}
-All methods described so far enable the efficient calculation of some CV-based FES, as defined in equation~\ref{eq:free energy}. As already noted in section \ref{sec:freeE}, this formulation is not invariant under the transformation of CV, e.g. $A(\xi(\textbf{x}))\neq A(\zeta(\textbf{x}))$. It is therefore a purely thermodynamic quantity, encoding the statistical properties of a system in thermal equilibrium, and can not be used to obtain kinetic information, like free energy barriers $\Delta^\ddagger A_{A\rightarrow B}$ or reaction rate constant $k_{A\rightarrow B}$.\autocite{bal2020free}
+\subsection{Multiple-Walker (MW) strategy for adaptive biasing}
+\label{sec:MW}
+By using the previously described methods the required simulation time to sample the reaction coordinate of alchemical transitions can be reduced from multiple ns to few ps, reducing the required MD steps by roughly a factor of 1000.
+However, instead of using only one single MD simulation, i.e. \textit{walker}, one can think of letting multiple walkers contribute to the same bias, to exploit the full potential of modern HPC clusters.
+For this purpose all accumulators $f$ required for the respective method, such as histograms, bias forces or potentials, are synced between otherwise independent walkers in fixed time intervals, evolving according to the following update formula
+\begin{equation}
+   f_{l}(t_{sync}) \leftarrow f_{g} + \biggl(f_{l}(t_{sync})-f_{l}(t_{sync}-1) \biggr)
+\end{equation}
+\begin{equation}
+   f_{g} \leftarrow f_{l}(t_{sync})
+\end{equation}
+where indices $l$ and $g$ denote local and global contributions, respectively, and $t_{sync}$ is the time of synchronization.
+Global contributions $f_{g}$ are stored in a single buffer, which can only be accessed by one walker simultaneously to avoid inconsistencies.
 
+
+
+\section{Obtaining free energy barriers and reaction rate constants from biased simulations}
+\label{sec:A_geom}
+All methods described so far enable the efficient calculation of some CV-based FES, as defined in equation~\ref{eq:free energy}.
+As already noted in section \ref{sec:freeE}, this formulation is not invariant under the transformation of CV, e.g. $A(\xi(\textbf{x}))\neq A(\zeta(\textbf{x}))$, which should not come as a surprise as $\exp(-\beta A(\xi))/Z$ and $\exp(-\beta A({\zeta})/Z$ gives the marginal distribution along $\xi$ or $\zeta$, respectively.
+Critical points like local minima or saddle points of $A(\xi)$ have therefore no coordinate independent meaning and can not be used to obtain kinetic information, like free energy barriers $\Delta^\ddagger A_{A\rightarrow B}$ or reaction rate constants $k_{A\rightarrow B}$.\autocite{bal2020free}
+
+However, there also exists a different free energy definition, invariant under CV transformation, which will hereafter be referred to as geometric free energy, $A^G(\xi)$.\autocite{hartmann2011two}
+For this purpose the delta function of equation \ref{eq:rho} is replaced by a proper surface measure
+\begin{equation}
+  \rho^G (\xi) = \int \e^{-\beta U(\textbf{x})} d\xi(\textbf{x})
+\end{equation}
+and the geometric free energy is defined analogous to the normal free energy (equation \ref{eq:free energy})
+\begin{equation}
+  A^G(\xi) = -\beta^{-1}\ln \rho^G(\xi)
+\end{equation}
+Instead of the marginal distribution of the collective variable $\rho^G(\xi)/Z$ gives the probability density of the FES.
+The statistical ensembles related to both free energy definitions can be augmented into one another by the Fixman correction term $U \mapsto U + \beta^{-1}\ln |\nabla \xi|$ which relates both free energies through the $\xi$-conditioned average of gradients using
+\begin{equation}
+  A^G(\xi) = A(\xi) - \beta^{-1}\ln\braket{\lambda |\nabla \xi|}_\xi
+  \label{eq:f geom}
+\end{equation}
+where the length scale $\lambda$ is introduced to keep the exponential term dimensionless. Because all methods described in section \ref{sec:adaptive biasing} already involve calculation of the gradient this correction can be obtained in ABM calculations with almost no additional effort.\autocite{bal2020free} For multidimensional CVs $\braket{\lambda|\nabla\xi|}_\xi$ is replaced by $\braket{\lambda^n \det d}_\xi$ with
+\begin{equation}
+  d^2_{ij} = \nabla \xi_i \cdot \nabla \xi_j
+\end{equation}
+Figure \ref{fig:F geom} gives an numerical example of the relation of $A^G$ and $A$ in an ABF simulation.
 \begin{figure}[H]
     \centering
     \includegraphics[width=0.6\textwidth]{bilder/geom_free_energy}
-    \caption{Geometric free energy}
-\label{fig:FEM}%
+    \caption{
+      Standard and geometric free energy of an 2D double well potential sampled along $\xi(x)=1/x$ using the ABF method.\\
+      Both minima are equally probable, which is correctly described by the standard free energy difference $\Delta A_{A\rightarrow B}=-\beta^{-1}\ln \frac{\int_B \rho(\xi)d\xi}{\int_A \rho(\xi)d\xi}=0$.\\
+      Correcting $A(\xi)$ according to equation \ref{eq:f geom} gives the CV-invariant free energy barrier $\Delta^\ddagger  A_{A\rightarrow B}=A^G(\xi_{TS})-A^G(\xi_{min})$. The geometric free energy surface is equal to the underlying potential energy surface $U(\xi)$. This is only true if the collective variable is adiabatically separable from the remaining degrees of freedom, in this case the y-direction.\autocite{hartmann2011two}
+    }
+\label{fig:F geom}%
 \end{figure}
