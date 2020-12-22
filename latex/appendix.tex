@@ -1,65 +1,101 @@
 \chapter{Appendix}
 \label{cha:appendix}
 
-\section{Reaction coordinates}
+\section{Definition of Collective Variables}
 \label{sec:reaction coordinates}
 
-In the present work valance angles and torsion angles were used as collective variables for Umbrella Sampling, metaD, ABF, eABF or meta-eABF simulations. Below analytic expressions for the calculation of both variables, their gradients, inverse gradients and divergence of inverse gradients are given.
+In the present work distances, projected distances, angles and torsion angles between groups of atoms were used as collective variables for Umbrella Sampling, metaD, ABF, eABF or meta-eABF simulations.
+Below analytic expressions for the calculation of all CVs, their gradients, inverse gradients and divergence of inverse gradients are given.
 
-\subsection{Bond Angle}
-The bond angle $\theta$ between three Cartesian coordinates ($r_1, r_2, r_3$) is given by the dot product between bond distances $r_{ij}=r_j - r_i$:
+The center of mass $r^C$ of a group of $N$ atoms is calculated according to
 \begin{equation}
-  \cos \theta = \hat{r}_{21} \cdot \hat{r}_{23}
+  r^C(\textbf{x}) = \frac{1}{M^C} \sum_{i=0}^N m_i r_i
 \end{equation}
-The derivative of $\theta$ in Cartesian coordinates is then given by
+with mass of each atom $m_i$ and Cartesian coordinates $r_i = (x_i,y_i,z_i)$. $M^C$ is the mass of the group.
+All following collective variables are calculated between centers of mass. The index C will be dropped for convenience.
+To obtain derivatives of single atoms the gradient its corresponding group is weighted with $m_i/M$.
+The distances between group i and j is given by
 \begin{equation}
-  \frac{\partial \theta}{\partial r_1} = \frac{norm(\hat{r}_{21} \times (\hat{r}_{21} \times \hat{r}_{23}))}{|r_{12}|}
+ r_{ij} = r_j - r_i
+\end{equation}
+and the absolute distance is $d_{ij} = \| r_{ij}\|$.
+The derivatives with respect to $r_i$ and $r_j$ are defined by
+\begin{equation}
+  \frac{\partial d_{ij}}{\partial r_j} = \frac{r_{ij}}{\|r_{ij}\|} = \hat{r}_{ij}
 \end{equation}
 \begin{equation}
-  \frac{\partial \theta}{\partial r_3} = \frac{norm(\hat{r}_{32} \times (\hat{r}_{21} \times \hat{r}_{23}))}{|r_{23}|}
+  \frac{\partial d_{ij}}{\partial r_i} = - \hat{r}_{ij}
+\end{equation}
+where the hat denotes unit vectors.
+The projection of distance $\| r_{ij}\|$ onto another axis $r_{jk}$ is defined by
+\begin{equation}
+  d^p_{ij} = r_{ij} \cdot \hat{r}_{jk}
+\end{equation}
+and the derivative of the projection is defined by
+\begin{equation}
+   \frac{\partial d^p_{ij}}{\partial r_i} = -\hat{r}_{jk}
 \end{equation}
 \begin{equation}
-  \frac{\partial \theta}{\partial r_2}= -\frac{\partial \theta}{\partial r_1} - \frac{\partial \theta}{\partial r_3}
+   \frac{\partial d^p_{ij}}{\partial r_j} = \hat{r}_{jk}
 \end{equation}
-Choosing as inverse gradient $\textbf{v}_i = \nabla \theta/|\nabla \theta|^2$ the divergence of vector field $\textbf{v}_i$ is given by:
+The bond angle $\theta$ between three centers ($r_i, r_j, r_k$) is defined by the dot product of bond distances $r_{ji}$ and $r_{jk}$:
 \begin{equation}
-  \nabla \cdot \textbf{v}_i = \cot \theta
+  \cos \theta = \hat{r}_{ji} \cdot \hat{r}_{jk}
 \end{equation}
-
-\subsection{Torsion Angle}
-
-The torsion angle $\phi$ between four Cartesian coordinates ($r_1, r_2, r_3, r_4$) is given by:
+The gradient of $\theta$ is then given by
 \begin{equation}
-  \tan \phi = \frac{(\hat{r}_{12} \times n_1) \cdot n_2}{n_1 \cdot n_2}
+  \frac{\partial \theta}{\partial r_i} = \frac{(r_{ji} \times (r_{ji} \times r_{jk})) }{\| r_{ij}\| \| (r_{ji} \times (r_{ji} \times r_{jk})) \|}
+\end{equation}
+\begin{equation}
+  \frac{\partial \theta}{\partial r_k} = \frac{\| (r_{kj} \times (r_{ji} \times r_{ji})) \|}{\| r_{kj}\| \| (r_{kj} \times (r_{ji} \times r_{ji})) \|}
+\end{equation}
+\begin{equation}
+  \frac{\partial \theta}{\partial r_j}= -\frac{\partial \theta}{\partial r_i} - \frac{\partial \theta}{\partial r_k}
+\end{equation}
+The torsion angle $\phi$ between four Cartesian coordinates ($r_i, r_j, r_k, r_l$) is given by:
+\begin{equation}
+  \tan \phi = \frac{(\hat{r}_{ij} \times n_1) \cdot n_2}{n_1 \cdot n_2}
 \end{equation}
 with
 \begin{equation}
-  n_1 = r_{23} - (r_{12} \cdot \hat{r}_{23})\hat{r}_{23}
+  n_1 = r_{jk} - (r_{ij} \cdot \hat{r}_{jk})\hat{r}_{jk}
 \end{equation}
 \begin{equation}
-  n_2 = r_{34} - (r_{34} \cdot \hat{r}_{23})\hat{r}_{23}
+  n_2 = r_{kl} - (r_{kl} \cdot \hat{r}_{jk})\hat{r}_{jk}
 \end{equation}
 The derivative of $\phi$ in Cartesian coordinates is given by:
 \begin{equation}
-  \frac{\partial\phi}{\partial r_1} = - \frac{\hat{r}_{21}\times\hat{r}_{23}}{|r_{12}|\sin^2\theta_{123}}
+  \frac{\partial\phi}{\partial r_i} = - \frac{\hat{r}_{ji}\times\hat{r}_{jk}}{\|r_{ij}\|\sin^2\theta_{ijk}}
 \end{equation}
 \begin{equation}
-  \frac{\partial\phi}{\partial r_4} = - \frac{\hat{r}_{34}\times\hat{r}_{23}}{|r_{34}|\sin^2\theta_{234}}
+  \frac{\partial\phi}{\partial r_l} = - \frac{\hat{r}_{kl}\times\hat{r}_{jk}}{\|r_{kl}\|\sin^2\theta_{jkl}}
 \end{equation}
 \begin{equation}
-  \frac{\partial\phi}{\partial r_2} = c_{123}\frac{\partial\phi}{\partial r_1} - b_{432}\frac{\partial\phi}{\partial r_4}
+  \frac{\partial\phi}{\partial r_j} = c_{ijk}\frac{\partial\phi}{\partial r_i} - b_{lkj}\frac{\partial\phi}{\partial r_l}
 \end{equation}
 \begin{equation}
-  \frac{\partial\phi}{\partial r_3} = - \frac{\partial\phi}{\partial r_1} - \frac{\partial\phi}{\partial r_4} - \frac{\partial\phi}{\partial r_2}
+  \frac{\partial\phi}{\partial r_k} = - \frac{\partial\phi}{\partial r_i} - \frac{\partial\phi}{\partial r_l} - \frac{\partial\phi}{\partial r_j}
 \end{equation}
 with
 \begin{equation}
-  c_{123} = \frac{|r_{12}|\cos\theta_{123}}{|r_{23}|}-1
+  c_{ijk} = \frac{\|r_{ij} \| \cos\theta_{ijk}}{\|r_{jk} \|}-1
 \end{equation}
 \begin{equation}
-  b_{432} = \frac{|r_{34}|\cos\theta_{234}}{|r_{23}|}
+  b_{lkj} = \frac{\|r_{kl} \| \cos\theta_{jkl}}{\|r_{jk} \|}
 \end{equation}
-Choosing as inverse gradient $\textbf{v}_i = \nabla \phi/|\nabla \phi|^2$ the divergence of vector field $\textbf{v}_i$ is zero:
+where $\partial \phi/\partial r_j$ and $\partial \phi/\partial r_k$ are defined in such a way, that the sum of torques and derivatives is zero.
+
+Always choosing as inverse gradient $\textbf{v}(\xi) = \nabla \xi/\|\nabla \xi \| ^2$ the divergence of vector fields $\textbf{v}_i(\xi)$ are given by
 \begin{equation}
-  \nabla \cdot \textbf{v}_i = 0
+  \nabla \cdot \textbf{v}(d) = \frac{2}{d},
 \end{equation}
+\begin{equation}
+  \nabla \cdot \textbf{v}(d^p) = 0,
+\end{equation}
+\begin{equation}
+  \nabla \cdot \textbf{v}(\theta) = \cot \theta,
+\end{equation}
+\begin{equation}
+  \nabla \cdot \textbf{v}(\phi) = 0,
+\end{equation}
+for distances, projected distances, angles and dihedrals, respectively.

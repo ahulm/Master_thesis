@@ -261,6 +261,7 @@ Replacing the inverse gradient by vectorfield $\textbf{v}_i$, expression \ref{eq
 \end{equation}
 but still involves the calculation of second derivatives in the form of the divergence of vector fields $\textbf{v}_i$.\autocite{comer2015adaptive} Analytic expressions for bend angles and torsion angles, used in the present work, are given in the appendix. However, for complicated CV's like torsion angles orthogonalization via equation \ref{eq:ortho v} becomes exceedingly tedious and impractical, significantly limiting the applicability of ABF for multidimensional reaction coordinates.
 
+\newpage
 \subsection{extended Lagrangian based methods (eABF, meta-eABF, WTM-eABF)}
 \label{sec:eABF}
 To circumvent the technical requirements of ABF Lesage et al.\autocite{lesage2017smoothed} proposed an more flexible approach termed extended ABF (eABF), where additional coordinates $\lambda$ with mass $m_{\lambda}$, which are coupled to the reaction coordinates $\xi_i$ with harmonic potentials, are introduced. The extended system ($\textbf{x}$, $\lambda$) evolves according to Langevin dynamics in the potential
@@ -272,9 +273,10 @@ The key intuition behind eABF is, that in the tight coupling (low $\sigma$, high
 Therefore, to obtain uniform sampling along $\xi$ it is sufficient to bias the dynamics of $\lambda$. The inverse gradient is chosen as zero for all physical coordinates $\textbf{x}$ and 1 for $\lambda$.
 This way constraints \ref{eq:cond1} and \ref{eq:cond2} are always satisfied, which is especially useful for calculations involving a set of non-orthogonal reaction coordinates.
 In practice the Langevin integrator for the extended system is implemented separately from the physical MD engine and can be coupled to any collective variable of interest without additional effort.
+
 Sampling the extended system in thermal equilibrium gives the following Boltzmann distribution in $\lambda$:
 \begin{equation}
-  \rho^k(\lambda) \propto \int \e^{-\beta U_{ext}(\textbf{x},\lambda)} d\textbf{x} \\
+  p_\lambda(\lambda) \propto \int \e^{-\beta U_{ext}(\textbf{x},\lambda)} d\textbf{x} \\
 \end{equation}
 The bias on $\lambda$ is the running average over the spring force in $\lambda$-bin k:
 \begin{equation}
@@ -283,23 +285,35 @@ The bias on $\lambda$ is the running average over the spring force in $\lambda$-
 \end{equation}
 Note that the instantaneous force estimate in each step no longer depends on the all atomic coordinates $\textbf{x}$ like in normal ABF (cf. equation \ref{eq:inst ABF force}), but only on ($\lambda_i - \xi_i$).
 This has the advantageous side effect, that the noise in $\overline{F}$ can be reduced significantly and faster convergence of $\overline{F}$ can be expected, if $\sigma^2$ is well chosen.\autocite{lesage2017smoothed} Specifically, the mean square fluctuations of the spring force is given by $\sigma_F \propto (\beta\sigma)^{-1}$, which shows that the variance of $\overline{F}$ is smaller for higher values of $\sigma$.
-For small values of $N_{Step}^{k}$ the linear ramp function $R(N_{Step},k)$ given by equation \ref{eq:ramp} is used nonetheless. Overall, with the time dependent bias converging towards $A^{k}(\lambda_{i})$ the biased Boltzmann distribution converges towards:
+For small values of $N_{Step}^{k}$ the linear ramp function $R(N_{Step},k)$ given by equation \ref{eq:ramp} is used nonetheless. Overall, with the time dependent bias converging towards $A^{k}(\lambda_{i})$, the biased Boltzmann distribution is given by:
 \begin{equation}
-  \tilde{\rho}^k(\textbf{x},\lambda_i) \propto \e^{-\beta U_{ext}(\textbf{x},\lambda_i) + A^{k}(\lambda_i)}
+  \tilde{p}_\lambda(\lambda_i) \propto \int \e^{-\beta U_{ext}(\textbf{x},\lambda_i) + A^{k}(\lambda_i)} d\textbf{x}
 \end{equation}
+
+\begin{figure}[H]
+    \centering
+    \subfloat[Trajectories of $\xi$ and $\lambda$, \\
+    Inset: Histogram of ($\lambda-\xi$) with standard deviation $\sigma$]{{\includegraphics[width=0.49\textwidth]{bilder/eABF_traj} }}
+    \subfloat[Biased $\xi$- or $\lambda$-conditioned probability distributions $\tilde{p}_\xi$ and $\tilde{p}_\lambda$]{{\includegraphics[width=0.49\textwidth]{bilder/eABF_prob} }}
+    \caption{Numerical examples for eABF method.}
+\label{fig:eABF traj}%
+\end{figure}
+
 We now need to find a robust estimator to recover the unbiased free energy of the physical system $A(\xi_i)$ from biased dynamics in the extended system.
 The naive approach is to approximate $A(\xi_i)$ with $A^k(\lambda_i)$, which can be obtained by simply integrating the bias force $\overline{F}(\lambda_{i})$ like in normal ABF.
 However, this will only produce unbiased results in the tight coupling limit for $\sigma \rightarrow 0$, where standard ABF is recovered.
 
 However, as we saw earlier, it is advantageous to use higher values of $\sigma$.
-An asymptotically unbiased estimator of the free energy can be derived by correcting the free energy gradient obtained from the eABF-biased distribution $\tilde{\rho}(\xi)$ with the average biasing force on $\xi$
+An asymptotically unbiased estimator of the free energy can be derived by correcting the free energy gradient obtained from the eABF-biased distribution $\tilde{p}(\xi)$ with the average biasing force on $\xi$
 \begin{equation}
-  \frac{\partial A(\xi_i)}{\partial \xi_i} = -\beta^{-1}\frac{\partial \ln \tilde{\rho}(\xi_i)}{\partial \xi_i} + k(\braket{\lambda_i}_{\xi_i}-\xi_{i}) \label{eq:CZAR}
+  \frac{\partial A(\xi_i)}{\partial \xi_i} = -\beta^{-1}\frac{\partial \ln \tilde{p}(\xi_i)}{\partial \xi_i} + k(\braket{\lambda_i}_{\xi_i}-\xi_{i}) \label{eq:CZAR}
 \end{equation}
-which is called \textit{Corrected z-averaged restraint} (CZAR) and can be calculated on-the-fly during the simulation at little extra cost by introducing two additional accumulators for $\tilde{\rho}(z)$ and $k(\braket{\lambda_i}_{z}-z_{i})$ which are only joined at output times.\autocite{lesage2017smoothed}
+which is called \textit{Corrected z-averaged restraint} (CZAR) and can be calculated on-the-fly during the simulation at little extra cost by introducing two additional accumulators for $\tilde{p}(z)$ and $k(\braket{\lambda_i}_{z}-z_{i})$ which are only joined at output times.\autocite{lesage2017smoothed} Figure \ref{fig:eABF flowchart} shows gives a schematic overview of the full eABF/CZAR algorithm.
 
 \begin{figure}[H]
-   \caption{Schematic flowchart of the eABF algorithm}
+   \caption{
+     Flowchart of the eABF algorithm. $k_{\lambda,\xi}$ denote $\lambda$ or $\xi$ conditioned bin indices in bins with size $\Delta\xi$. $\tilde{\rho}_\lambda$ and $\tilde{\rho}_\xi$ are $\lambda$- or $\xi$- conditioned histograms and $R$ is the ABF ramp function. $F_B$ is the sum bias force samples. Outputs are written in fixed intervals.
+   }
 
         \centering
         \begin{tikzpicture}[minimum size=5mm,node distance=4cm and 7cm,>=stealth,bend angle=45,auto]
@@ -309,17 +323,17 @@ which is called \textit{Corrected z-averaged restraint} (CZAR) and can be calcul
 
         \node [decision, below of=F_ext, yshift=-1cm] (decide_lambda) {$\xi_{min}\leq \lambda \leq \xi_{max}$};
 
-        \node [block, below of=decide_lambda,xshift=-3cm] (la_bin) {$k_\lambda = \lfloor \frac{\lambda - \xi_{min}}{\Delta \xi} \rfloor$};
+        \node [block, below of=decide_lambda,xshift=-3cm] (la_bin) {$k_\lambda = \lfloor \frac{|\lambda - \xi_{min}|}{\Delta \xi} \rfloor$};
         \node [block, below of=la_bin] (la_hist) {$\tilde{\rho}_\lambda(k_\lambda) \pluseqq 1$};
-        \node [block, below of=la_hist] (R) {$k_\lambda = f(k_\lambda)$ (eq. \ref{eq:ramp})};
+        \node [block, below of=la_hist] (R) {$R(k_\lambda) = f(k_\lambda)$ (eq. \ref{eq:ramp})};
         \node [block, below of=R] (F_B1) {$F_B(k_\lambda)\pluseqq \frac{1}{\sigma^2}(\lambda-\xi)$};
-        \node [block, below of=F_B1] (F_B2) {$F(\textbf{x},\lambda) \pluseqq \frac{F_B(k_\lambda)}{\tilde{\rho}_\lambda(k_\lambda)}\nabla\lambda$};
+        \node [block, below of=F_B1] (F_B2) {$F(\textbf{x},\lambda) \pluseqq \frac{R(k_\lambda)F_B(k_\lambda)}{\tilde{\rho}_\lambda(k_\lambda)}\nabla\lambda$};
 
         \node [block, right of=R,xshift=4cm] (conf1) {confine $\lambda$ to range of interest};
 
         \node [decision, below of=F_B2,xshift=3cm] (decide_xi) {$\xi_{min}\leq \xi \leq \xi_{max}$};
 
-        \node [block, below of=decide_xi,xshift=-3cm] (xi_bin) {$k_\lambda = \lfloor \frac{\xi - \xi_{min}}{\Delta \xi} \rfloor$};
+        \node [block, below of=decide_xi,xshift=-3cm] (xi_bin) {$k_\xi = \lfloor \frac{|\xi - \xi_{min}|}{\Delta \xi} \rfloor$};
         \node [block, below of=xi_bin] (xi_hist) {$\tilde{\rho}_\xi(k_\xi) \pluseqq 1$};
         \node [block, below of=xi_hist] (F_corr) {$F_{corr}(k_\xi) \pluseqq \frac{1}{\sigma^2}(\lambda-\xi)$};
 
@@ -327,50 +341,50 @@ which is called \textit{Corrected z-averaged restraint} (CZAR) and can be calcul
 
         \node [block,below of=F_corr,xshift=3cm] (MD1) {Finish Langevin dynamics of extended system};
 
-        \node [decision, below of=MD1,xshift=3cm] (output) {$t=t_{out}$};
+        \node [decision, below of=MD1,xshift=3cm] (output) {write output?};
         \node [block, left of=output,xshift=-4cm] (CZAR) {calculate CZAR according to eq. \ref{eq:CZAR}};
         \node [block, left of=CZAR,xshift=-4cm] (out) {write output};
 
-        \node [block, left of=R,xshift=-4cm] (MD2) {MD step of system according to Langevin dynamics};
+        \node [block, left of=R,xshift=-4cm] (MD2) {MD step of physical system. (compare Algorithm \ref{alg:ABM})};
 
         \path [line] (xi) -- (langevin);
         \path [line] (langevin) -- (F_ext);
         \path [line] (F_ext) -- (decide_lambda);
 
-        \draw [->] (decide_lambda) -- (la_bin);
+        \path [line] (decide_lambda) -- node [above,xshift=-0.3cm] {yes} (la_bin);
         \path [line] (la_bin) -- (la_hist);
         \path [line] (la_hist) -- (R);
         \path [line] (R) -- (F_B1);
         \path [line] (F_B1) -- (F_B2);
 
-        \draw [->] (decide_lambda) -- (conf1);
+        \draw [->] (decide_lambda) -- node {no} (conf1);
 
         \path [line] (F_B2) -- (decide_xi);
         \path [line] (conf1) -- (decide_xi);
 
-        \draw [->] (decide_xi) -- (xi_bin);
+        \draw [->] (decide_xi) -- node [above,xshift=-0.3cm] {yes} (xi_bin);
         \path [line] (xi_bin) -- (xi_hist);
         \path [line] (xi_hist) -- (F_corr);
 
-        \draw [->] (decide_xi) -- (conf2);
+        \draw [->] (decide_xi) -- node {no} (conf2);
 
         \path [line] (F_corr) -- (MD1);
         \path [line] (conf2) -- (MD1);
 
         \path [line] (MD1) -- (output);
-        \path [line] (output) -- (CZAR);
+        \path [line] (output) -- node [above] {yes} (CZAR);
         \path [line] (CZAR) -- (out);
 
         \draw[->] (MD1) -| (MD2);
         \draw[->] (MD2) |- (xi);
 
         \end{tikzpicture}
-        \label{pic:eABF flowchart}
+        \label{fig:eABF flowchart}
 \end{figure}
 
-The CZAR estimator is able to recover the unbiased free energy derivative only from time trajectory $(z_i,\lambda_i)$ of the extended system, independent of the bias on $\lambda_i$, as long as the simulation is in thermal equilibrium. It is therefore possible to use any arbitrary bias on $\lambda_i$, for example using metadynamics on the extended variable (eMtd, eWTM).
-One particular useful choice for $\overline{F}(\lambda_{i}, k)$ is to combine the repulsive MtD or WTM potential with the eABF bias, an idea the authors figuratively described with 'Shaving Barriers, and Flooding Valleys'.\autocite{fu2018zooming}
-This way the inherent difficulty in all ABF methods to get accurate force estimates in high free energy regions at the beginning of the simulation can be solved, by pushing the system towards this regions with an repulsive potential.
+The CZAR estimator is able to recover the unbiased free energy derivative only from time trajectory $(z_i,\lambda_i)$ of the extended system, independent of the bias on $\lambda_i$, as long as the simulation is in thermal equilibrium. It is therefore possible to bias the extended variable with any arbitrary force, for example metadynamics (eMtd, eWTM).
+One particular useful choice for $\overline{F}(\lambda_{i}, k)$ is to combine repulsive MtD or WTM potentials with the eABF bias, an idea the authors figuratively described with 'Shaving Barriers, and Flooding Valleys'.\autocite{fu2018zooming}
+This way the inherent difficulty for ABF methods to get accurate force estimates in high free energy regions at the beginning of the simulation can be solved, by pushing the system towards this regions.
 The full MtD-eABF and WTM-eABF bias terms read
 \begin{equation}
   F_{B}^{MtD-eABF}(\lambda_i, t) = -\frac{\braket{\xi_i(\textbf{x})-\lambda_i}_{\lambda_i}}{\beta \sigma_i^2}+\frac{\partial}{\partial \lambda_i} U_{B}^{MtD}(\lambda_i,t)
@@ -385,17 +399,15 @@ The relative contributions of the eABF and MtD/WTM term will fluctuate over the 
 \label{sec:MW}
 By using the previously described methods the required simulation time to sample the reaction coordinate of alchemical transitions can be reduced from multiple ns to few ps, reducing the required MD steps by roughly a factor of 1000.
 However, instead of using only one single MD simulation, i.e. \textit{walker}, one can think of letting multiple walkers contribute to the same bias, to exploit the full potential of modern HPC clusters.
-For this purpose all accumulators $f$ required for the respective method, such as histograms, bias forces or potentials, are synced between otherwise independent walkers in fixed time intervals, evolving according to the following update formula
+For this purpose all accumulators $f$ required for the respective method, such as histograms, bias forces or potentials, are synced between otherwise independent walkers in fixed time intervals. Global and local accumulators evolve according to the following update formula
 \begin{equation}
    f_{l}(t_{sync}) \leftarrow f_{g} + \biggl(f_{l}(t_{sync})-f_{l}(t_{sync}-1) \biggr)
 \end{equation}
 \begin{equation}
    f_{g} \leftarrow f_{l}(t_{sync})
 \end{equation}
-where indices $l$ and $g$ denote local and global contributions, respectively, and $t_{sync}$ is the time of synchronization.
+with time of synchronization $t_{sync}$.
 Global contributions $f_{g}$ are stored in a single buffer, which can only be accessed by one walker simultaneously to avoid inconsistencies.
-
-
 
 \section{Obtaining free energy barriers and reaction rate constants from biased simulations}
 \label{sec:A_geom}
