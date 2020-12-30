@@ -4,7 +4,7 @@
 \section{Definition of Collective Variables}
 \label{sec:reaction coordinates}
 
-In the present work distances, projected distances, angles and torsion angles between groups of atoms were used as collective variables for Umbrella Sampling, metaD, ABF, eABF or meta-eABF simulations.
+In the present work distances, projected distances, angles and torsion angles between groups of atoms were used as collective variables for US, MtD, ABF, eABF or meta-eABF simulations.
 Below analytic expressions for the calculation of all CVs, their gradients, inverse gradients and divergence of inverse gradients are given.
 
 The center of mass $r^C$ of a group of $N$ atoms is calculated according to
@@ -47,7 +47,7 @@ The gradient of $\theta$ is then given by
   \frac{\partial \theta}{\partial r_i} = \frac{(r_{ji} \times (r_{ji} \times r_{jk})) }{\| r_{ij}\| \| (r_{ji} \times (r_{ji} \times r_{jk})) \|}
 \end{equation}
 \begin{equation}
-  \frac{\partial \theta}{\partial r_k} = \frac{\| (r_{kj} \times (r_{ji} \times r_{ji})) \|}{\| r_{kj}\| \| (r_{kj} \times (r_{ji} \times r_{ji})) \|}
+  \frac{\partial \theta}{\partial r_k} = \frac{(r_{kj} \times (r_{ji} \times r_{ji}))}{\| r_{kj}\| \| (r_{kj} \times (r_{ji} \times r_{ji})) \|}
 \end{equation}
 \begin{equation}
   \frac{\partial \theta}{\partial r_j}= -\frac{\partial \theta}{\partial r_i} - \frac{\partial \theta}{\partial r_k}
@@ -71,19 +71,12 @@ The derivative of $\phi$ in Cartesian coordinates is given by:
   \frac{\partial\phi}{\partial r_l} = - \frac{\hat{r}_{kl}\times\hat{r}_{jk}}{\|r_{kl}\|\sin^2\theta_{jkl}}
 \end{equation}
 \begin{equation}
-  \frac{\partial\phi}{\partial r_j} = c_{ijk}\frac{\partial\phi}{\partial r_i} - b_{lkj}\frac{\partial\phi}{\partial r_l}
+  \frac{\partial\phi}{\partial r_j} = \bigl(\frac{\|r_{ij} \| \cos\theta_{ijk}}{\|r_{jk} \|}-1\bigr) \frac{\partial\phi}{\partial r_i} - \bigl( \frac{\|r_{kl} \| \cos\theta_{jkl}}{\|r_{jk} \|}\bigr)\frac{\partial\phi}{\partial r_l}
 \end{equation}
 \begin{equation}
   \frac{\partial\phi}{\partial r_k} = - \frac{\partial\phi}{\partial r_i} - \frac{\partial\phi}{\partial r_l} - \frac{\partial\phi}{\partial r_j}
 \end{equation}
-with
-\begin{equation}
-  c_{ijk} = \frac{\|r_{ij} \| \cos\theta_{ijk}}{\|r_{jk} \|}-1
-\end{equation}
-\begin{equation}
-  b_{lkj} = \frac{\|r_{kl} \| \cos\theta_{jkl}}{\|r_{jk} \|}
-\end{equation}
-where $\partial \phi/\partial r_j$ and $\partial \phi/\partial r_k$ are defined in such a way, that the sum of torques and derivatives is zero.
+where $\partial \phi/\partial r_j$ and $\partial \phi/\partial r_k$ are defined to fulfill the conservation of (angular) momentum.
 
 Always choosing as inverse gradient $\textbf{v}(\xi) = \nabla \xi/\|\nabla \xi \| ^2$ the divergence of vector fields $\textbf{v}_i(\xi)$ are given by
 \begin{equation}
@@ -99,3 +92,34 @@ Always choosing as inverse gradient $\textbf{v}(\xi) = \nabla \xi/\|\nabla \xi \
   \nabla \cdot \textbf{v}(\phi) = 0,
 \end{equation}
 for distances, projected distances, angles and dihedrals, respectively.
+
+\section{Numerical examples}
+\label{sec:num examples}
+
+To test adaptive biasing methods the 2D test potentials $U_1$ and $U_2$ were used. For numerical tests of adaptive biasing methods a particle with a mass of 10~a.u. is simulated according to Algorithm \ref{alg:ABM} with a step size of 5 fs and at a temperature of 300~K.
+\begin{equation}
+  U_1(x,y) = a(x-c)^2(x+d)^2 + by^2 \label{eq:U1}
+\end{equation}
+\begin{equation}
+  U_2(x,y) = -\ln\bigl( e^{-a(x-c)^2 - b(y-d)^2} + e^{-a(x+c)^2 - b(y+d)^2} \bigr) \label{eq:U2S}
+\end{equation}
+\begin{table}[H]
+        \centering
+        \caption{Free Parameters for definition of $U_1$ and $U_2$.}
+        \begin{tabular}{ c | c  c  c  c }
+                & a & b & c & d   \\
+                \hline
+                $U_1$  & $8.0e-6$ kJ/mol & $0.5$ kJ/mol & 80 Bohr & 160 Bohr \\
+                $U_2$  & $0.005$ kJ/mol  & $0.040$ kJ/mol & 40 Bohr & 20 Bohr \\
+        \end{tabular}
+        \label{tab:2D pots}
+\end{table}
+
+\begin{figure}[H]
+    \centering
+    \vspace{-1cm}
+    \subfloat[$U_1$]{{\includegraphics[width=0.49\textwidth]{bilder/U1} }}
+    \subfloat[$U_2$]{{\includegraphics[width=0.49\textwidth]{bilder/U2} }}
+    \caption{Potentials for test calculations}
+\label{fig:ABF}%
+\end{figure}
