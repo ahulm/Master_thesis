@@ -5,7 +5,7 @@ bohr2angs   = 0.52917721092e0
 
 # -----------------------------------------------------------------------------------------------------
 def mass_center(MD, atoms):
-    '''get center of mass of group of atoms
+    '''get center of mass and overall mass of group of atoms
     '''   
     m = 0
     c = np.zeros(3)
@@ -200,7 +200,73 @@ def torsion(self, atoms):
     return (xi, grad_xi)
 
 # -----------------------------------------------------------------------------------------------------
-def lin_comb_dists(self, atoms):
+def hBond(self, atoms, n=6, m=8):
+    '''hydrogen bond as coordination number between the donor and acceptor atom
+     
+    args:
+        self		(object of bias class)
+        atoms           (array, [index hydrogen, index acceptor, index donor, cutoff distance]) 
+    returns:
+        xi              (double, dimensionless number between 0 and 1)
+        grad_xi         (array, N-atoms)
+    '''
+    (p2,m2) = mass_center(self.the_md, atoms[1]) 
+    (p3,m3) = mass_center(self.the_md, atoms[2]) 
+
+    if hasattr(atoms[0], "__len__"):
+        diff_0 = 0.0
+        for index, a in enumerate(atoms[0]): 
+            c_new = np.array([self.the_md.coords[3*a],self.the_md.coords[3*a+1],self.the_md.coords[3*a+2]],dtype=np.float)
+            diff_1 = np.linalg.norm(c_new - p2)
+            diff_2 = np.linalg.norm(c_new - p3)
+            diff_new = diff_1 + diff_2
+            if diff_new < diff_0:
+                diff_new = diff_0
+                h_index  = a
+
+        (p1,m1) = mass_center(self.the_md, h_index)
+
+    else:
+        (p1,m1) = mass_center(self.the_md, atoms[0])    
+
+    # coord number
+    d0 = atoms[3] 
+    r1 = p2-p1
+    r2 = p3-p1
+
+    d1 = np.linalg.norm(r1)
+    d2 = np.linalg.norm(r2)
+    
+    xi =  (1-np.power(d1/d0,n))/(1-np.power(d1/d0,m))
+    xi += (1-np.power(d2/d0,n))/(1-np.power(d2/d0,m))    
+    
+    # gradient
+    w1 = mass_weights(self.the_md, m1, atoms[0])
+    w2 = mass_weights(self.the_md, m2, atoms[1])
+    w3 = mass_weights(self.the_md, m3, atoms[2])
+
+    r1_d = r1/d0
+    r2_d = r2/d0
+
+    r1_d_n = np.power(r1_d,n)
+    r1_d_m = np.power(r1_d,m)
+    r2_d_n = np.power(r2_d,n)
+    r2_d_m = np.power(r2_d,m)
+    
+    dxi1 =- ( r1_d_n * ((n-m)*r1_d_m-n) + m*r1_d_m ) / ( r1 * np.power(r1_d_m-1, 2.0) )
+    dxi2 = -dxi1
+
+    dxi1 -= ( r2_d_n * ((n-m)*r2_d_m-n) + m*r2_d_m ) / ( r1 * np.power(r2_d_m-1, 2.0) ) 
+    dxi3 = -dxi1-dxi2
+
+    grad_xi =+ np.dot(dxi1, w1)
+    grad_xi += np.dot(dxi2, w2)
+    grad_xi += np.dot(dxi3, w3)
+     
+    return (xi, grad_xi)
+
+# -----------------------------------------------------------------------------------------------------
+def lin_comb_dists(self, i, atoms):
     '''linear combination distances and projected distances 
     '''
     CVs = np.array([])
@@ -227,10 +293,12 @@ def lin_comb_dists(self, atoms):
             print("ERROR: Invalid number of centers in definition of CV!")
             sys.exit(0)
 
+    write_lc_traj(i, CVs)
+
     return (CVs.mean(), grad_CVs) 
 
 # -----------------------------------------------------------------------------------------------------
-def lin_comb_angles(self, atoms):
+def lin_comb_angles(self, i, atoms):
     '''linear combination of angles or torsion
     '''
     CVs = np.array([])
@@ -257,7 +325,35 @@ def lin_comb_angles(self, atoms):
             print("ERROR: Invalid number of centers in definition of CV!")
             sys.exit(0)
     
+    write_lc_traj(i, CVs)
+
     return (CVs.mean(), grad_CVs) 
 
+# -----------------------------------------------------------------------------------------------------
+def lin_comb_hBonds(self, i, atoms):
+    '''linear combination of angles or torsion
+    '''
+    CVs = np.array([])
+    grad_CVs = np.zeros(3*self.the_md.natoms,dtype=np.float)
+    for index, CV in enumerate(atoms):
+
+        (x,dx) = hBond(self, np.array(CV))
+
+        CVs = np.append(CVs, x)
+        grad_CVs += dx
+
+    write_lc_traj(i, CVs)
+
+    return (CVs.mean(), grad_CVs) 
+
+# -----------------------------------------------------------------------------------------------------
+def write_lc_traj(i, CVs):
+    '''write traj of single contributions of linear combination
+    '''
+    traj_out = open("lc_traj_%d.dat" % (i+1), "a")
+    for j in range(len(CVs)):
+        traj_out.write("%14.6f\t" % (CVs[j]))
+    traj_out.write("\n")
+    traj_out.close()
 
 

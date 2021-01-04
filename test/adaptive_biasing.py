@@ -80,7 +80,10 @@ class ABM:
         self.f_conf   = f_conf
         self.out_freq = output_freq
         self.friction = friction
-       
+        
+        # mass scaled coordinates
+        self.sqrt_m = np.sqrt(self.the_md.masses)
+   
         # definition of CVs 
         self.ncoords = len(ats)
         self.CV      = np.array([item[0] for item in ats])     
@@ -90,7 +93,7 @@ class ABM:
 
         self.atoms = [[] for i in range(self.ncoords)]
         self.is_angle = [False for i in range(self.ncoords)]
-
+    
         for i in range(self.ncoords):
 
             if hasattr(ats[i][1], "__len__"):
@@ -237,11 +240,11 @@ class ABM:
                 else:
                     self.the_md.forces -= self.f_conf/H_to_kJmol * min_diff * delta_xi[i]
 
-        if self.the_md.step%self.out_freq:
+        if self.the_md.step%self.out_freq == 0:
             # write output
 
             if write_traj == True:
-                self.write_traj(xi)
+                self.write_traj(xi, extended = False)
             
             if write_output == True:
                 self.dF = -kB_a*self.the_md.target_temp*np.log(self.histogramm, out=np.zeros_like(self.histogramm),where=(self.histogramm!=0))
@@ -615,6 +618,17 @@ class ABM:
                     xi[i]       += x
                     delta_xi[i] += dx
                     div[i]      += 0.0  
+
+            elif self.CV[i] == 'hBond':
+            
+                    # Hydrogen Bond
+                    if self.the_md.step == 0 and self.method == 'ABF':
+                        print('ERROR: Do not use with ABF, divergence not implemented!')
+                        sys.exit(0)
+           
+                    (x, dx) = hBond(self, self.atoms[i])
+                    xi[i]       += x
+                    delta_xi[i] += dx
             
             elif self.CV[i] == 'lin_comb_dists':
                     
@@ -623,7 +637,7 @@ class ABM:
                         print('ERROR: Do not use linear combination of CVs with ABF, divergence not implemented!')
                         sys.exit(0)
 
-                    (x, dx) = lin_comb_dists(self, self.atoms[i])
+                    (x, dx) = lin_comb_dists(self, i, self.atoms[i])
                     xi[i]       += x
                     delta_xi[i] += dx
 
@@ -634,10 +648,20 @@ class ABM:
                         print('ERROR: Do not use linear combination of CVs with ABF, divergence not implemented!')
                         sys.exit(0)
 
-                    (x, dx) = lin_comb_dists(self, self.atoms[i])
+                    (x, dx) = lin_comb_dists(self, i, self.atoms[i])
                     xi[i]       += x
                     delta_xi[i] += dx
 
+            elif self.CV[i] == 'lin_comb_hBonds':
+                    
+                    # linear combination of distances and projeced distances
+                    if self.the_md.step == 0 and self.method == 'ABF':
+                        print('ERROR: Do not use linear combination of CVs with ABF, divergence not implemented!')
+                        sys.exit(0)
+
+                    (x, dx) = lin_comb_hBonds(self, i, self.atoms[i])
+                    xi[i]       += x
+                    delta_xi[i] += dx
                               
             else:
                 print("\n----------------------------------------------------------------------")
@@ -810,20 +834,26 @@ class ABM:
     # -----------------------------------------------------------------------------------------------------
     def __get_gradient_correction(self, delta_xi):
         '''get correction factor for geometric free energie in current step
-        
+           use mass-scalled coordinates to drop mass in calculation of free energy barrier 
+
         args:
             delta_xi       	(array, -, gradients along all CV's)
         returns:
             correction		(double, -, correction for current step)
         '''
         if self.ncoords == 1:
-            return np.linalg.norm(delta_xi[0])
+            q = self.sqrt_m * delta_xi[0]
+            return np.linalg.norm(q)
 
         else:
             d = np.array([[0.0,0.0],[0.0,0.0]])
-            d[0,0] = np.linalg.norm(delta_xi[0])
-            d[1,1] = np.linalg.norm(delta_xi[1])
-            d[1,0] = d[0,1] = np.sqrt(np.dot(delta_xi[0],delta_xi[1]))
+          
+            q0 = self.sqrt_m * delta_xi[0]
+            q1 = self.sqrt_m * delta_xi[1]
+
+            d[0,0] = np.linalg.norm(q0)
+            d[1,1] = np.linalg.norm(q1)
+            d[1,0] = d[0,1] = np.sqrt(np.dot(q0,q1))
             return np.linalg.det(d)
 
     # -----------------------------------------------------------------------------------------------------

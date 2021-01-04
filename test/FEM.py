@@ -64,7 +64,7 @@ class FEM:
         origD = [data[:,3].reshape(self.y_bins, self.x_bins), data[:,4].reshape(self.y_bins, self.x_bins)]
         D = [np.zeros(shape=(self.leny,self.lenx), dtype=np.float), np.zeros(shape=(self.leny,self.lenx), dtype=np.float)]
         for xy in range(2):
-            D[xy][::4, ::4] = origD[xy]
+            D[xy][::4,::4] = origD[xy]
             D[xy][::4,2::4] = 0.5*D[xy][::4,:-4:4] + 0.5*D[xy][::4,4::4] 
             D[xy][::4,1::4] = 0.5*D[xy][::4,2::4]  + 0.5*D[xy][::4,:-4:4]
             D[xy][::4,3::4] = 0.5*D[xy][::4,2::4]  + 0.5*D[xy][::4,4::4] 
@@ -156,7 +156,7 @@ class FEM:
         return np.sqrt(err)
 
     #--------------------------------------------------------------------------------------
-    def BFGS(self, maxiter=15000, ftol=1e-10, gtol=1e-5, error_function='rmsd'):
+    def BFGS(self, maxiter=15000, ftol=1e-10, gtol=1e-5, error_function='power'):
         '''BFGS minimization of error function
         '''        
         if error_function == 'rmsd':
