@@ -212,15 +212,16 @@ def hBond(self, atoms, n=6, m=8):
     '''
     (p2,m2) = mass_center(self.the_md, atoms[1]) 
     (p3,m3) = mass_center(self.the_md, atoms[2]) 
-
+    
     if hasattr(atoms[0], "__len__"):
         diff_0 = 0.0
+        h_index = atoms[0][0]
         for index, a in enumerate(atoms[0]): 
             c_new = np.array([self.the_md.coords[3*a],self.the_md.coords[3*a+1],self.the_md.coords[3*a+2]],dtype=np.float)
             diff_1 = np.linalg.norm(c_new - p2)
             diff_2 = np.linalg.norm(c_new - p3)
             diff_new = diff_1 + diff_2
-            if diff_new < diff_0:
+            if diff_new > diff_0:
                 diff_new = diff_0
                 h_index  = a
 
@@ -231,8 +232,8 @@ def hBond(self, atoms, n=6, m=8):
 
     # coord number
     d0 = atoms[3] 
-    r1 = p2-p1
-    r2 = p3-p1
+    r1 = p1-p2
+    r2 = p1-p2
 
     d1 = np.linalg.norm(r1)
     d2 = np.linalg.norm(r2)
@@ -253,10 +254,10 @@ def hBond(self, atoms, n=6, m=8):
     r2_d_n = np.power(r2_d,n)
     r2_d_m = np.power(r2_d,m)
     
-    dxi1 =- ( r1_d_n * ((n-m)*r1_d_m-n) + m*r1_d_m ) / ( r1 * np.power(r1_d_m-1, 2.0) )
+    dxi1 =+ ( r1_d_n * ((n-m)*r1_d_m-n) + m*r1_d_m ) / ( -r1 * np.power(r1_d_m-1, 2.0) )
     dxi2 = -dxi1
 
-    dxi1 -= ( r2_d_n * ((n-m)*r2_d_m-n) + m*r2_d_m ) / ( r1 * np.power(r2_d_m-1, 2.0) ) 
+    dxi1 =+ ( r2_d_n * ((n-m)*r2_d_m-n) + m*r2_d_m ) / ( -r2 * np.power(r2_d_m-1, 2.0) )
     dxi3 = -dxi1-dxi2
 
     grad_xi =+ np.dot(dxi1, w1)
@@ -273,28 +274,28 @@ def lin_comb_dists(self, i, atoms):
     grad_CVs = np.zeros(3*self.the_md.natoms,dtype=np.float)
     for index, CV in enumerate(atoms):
 
-        if len(CV) == 2:
+        if len(CV) == 3:
 
             # distance
-            (x,dx) = distance(self, np.array(CV))
+            (x,dx) = distance(self, np.array(CV[1:]))
           
-            CVs = np.append(CVs, x)
-            grad_CVs += dx
+            CVs = np.append(CV[0]*CVs, x)
+            grad_CVs += CV[0]*dx
 
-        elif len(CV) == 3:
+        elif len(CV) == 4:
    
             # projected distance
-            (x,dx) = projected_distance(self, np.array(CV))
+            (x,dx) = projected_distance(self, np.array(CV[1:]))
           
-            CVs = np.append(CVs, x)
-            grad_CVs += dx
+            CVs = np.append(CV[0]*CVs, x)
+            grad_CVs += CV[0]*dx
 
         else:
             print("ERROR: Invalid number of centers in definition of CV!")
             sys.exit(0)
 
     write_lc_traj(i, CVs)
-
+  
     return (CVs.mean(), grad_CVs) 
 
 # -----------------------------------------------------------------------------------------------------
