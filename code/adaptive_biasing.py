@@ -40,7 +40,7 @@ class ABM:
                         On-the-fly free energy estimate: dF= -(T+deltaT)/deltaT * V_bias
 
                         Parameters:
-                        	variance:   Gaussian variance [Bohr]
+                        	variance:   Gaussian variance [Bohr or degree]
                         	height:     Gaussian height [kJ/mol]
                         	update_int: Intervall for deposition of gaussians [steps]
                         	deltaT:     for WTM: deltaT -> 0            ordinary MD
@@ -54,21 +54,21 @@ class ABM:
 
                         Parameters:
                         	N_full:     Linear ramp function (bias *= N_k/N_full if N_full > N_k else 1)
-                        	sigma:      Standard deviation between CV and fictitious particle [Bohr]
-                               		    both are connected by spring force with force constant k=1/(beta*sigma^2) [Hartree]
+                        	sigma:      Standard deviation between CV and fictitious particle [Bohr or degree]
+                               		    connected to spring force by force constant k=1/(beta*sigma^2) 
                                 mass:       mass of fictitious particle [a.u.]
 
-        meta-eABF       Bias of extended coordinate by (WT) MtD + eABF (WTM-eABF or meta-eABF)
+        meta-eABF       Extended coordinate biased by (WT)-MtD + eABF (WTM-eABF or meta-eABF)
                         Unbiased force estimate obtained from CZAR estimator (Lesage, JPCB, 2016)
                         1D: On-the-fly free energy estimate, 
                         2D: Postprocessing step (FEM integration) necessary 
 
                         Parameters:
                                 N_full:     Linear ramp function (bias *= N_k/N_full if N_full > N_k else 1)
-                                sigma:      Standard deviation between CV and fictitious particle [Bohr]
-                                            both are connected by spring force with force constant k=1/(beta*sigma^2) [Hartree]
+                                sigma:      Standard deviation between CV and fictitious particle [Bohr] or [degree]
+                                            connected to spring force by force constant k=1/(beta*sigma^2) [Hartree]
                                 mass:       mass of fictitious particle [a.u.]
-                                variance:   Gaussian variance [Bohr]
+                                variance:   Gaussian variance [Bohr] or [degree]
                                 height:     Gaussian height [kJ/mol]
                                 update_int: Intervall for deposition of gaussians [steps]
                                 deltaT:     for WTM
@@ -353,13 +353,14 @@ class ABM:
         self.timing = time.perf_counter() - start
     
     #------------------------------------------------------------------------------------------------------
-    def MtD(self, gaussian_height, update_int=50, WT_dT=2000, WT=True, grid=False, write_traj=True):
+    def MtD(self, gaussian_height=1.0, update_int=50, WT_dT=2000, WT=True, grid=False, write_traj=True):
         '''Metadynamics and Well-Tempered Metadynamics
 
         args:
-            gaussian_height     (double, -, heigth of gaussians for bias potential)
+            gaussian_height     (double, 1.0, heigth of gaussians for bias potential [kJ/mol])
             WT                  (bool, True, use Well-Tempered MtD)
-            grid                (bool, True, use grid to save bias between function calls)
+            WT_dT               (double, 2000, only used if WT=True) 
+            grid                (bool, True, use coarce grained bias accumulated on grid)
             write_traj          (bool, True, write trajectory to CV_traj.dat)
 
         returns:
@@ -416,7 +417,7 @@ class ABM:
         '''extended Adaptive Biasing Force method
 
         args:
-	    N_full:         (double, 100, number of sampels when full bias is applied to bin)
+	    N_full:         (double, 100, linear ramp for bias = N_bin/N_full if N_full > N_bin)
             write_traj      (bool, True, write trajectory to CV_traj.dat)
         returns:
             -
@@ -506,14 +507,15 @@ class ABM:
         self.timing = time.perf_counter() - start
 
     #------------------------------------------------------------------------------------------------------
-    def meta_eABF(self, N_full=100, gaussian_height=0, update_int=20, WT_dT=2000, WT = True, grid = True, write_traj = True):
+    def meta_eABF(self, N_full=100, gaussian_height=1.0, update_int=20, WT_dT=2000, WT = True, grid = True, write_traj = True):
         '''meta-eABF or WTM-eABF: combination of eABF with metadynamic
 
         args:
-	    N_full:             (double, 100,  number of sampels when full bias is applied to bin)
-            gaussian_height     (double, 0.2,  height of gaussians for MtD potential in kJ/mol)
-            update_int          (int,    20,   intevall for deposition of gaussians)
+	    N_full:             (double, 100,  linear ramp for ABF force = N_bin/N_full if N_full > N_bin)
+            gaussian_height     (double, 1.0,  height of gaussians for MtD potential in kJ/mol)
+            update_int          (int,    20,   intevall for deposition of gaussians in steps)
             WT                  (bool,   True, use Well-Tempered metadynamics)
+            WT_dT               (double, 2000, only used if WT=True) 
             grid                (bool,   True, store metadynamic bias on grid between function calls)
             write_traj          (bool,   True, write trajectory to CV_traj.dat)
 
@@ -948,7 +950,7 @@ class ABM:
         '''Propagate momenta/coords of extended variable with Velocity Verlet
 
         args:
-           langevin                (bool, False)
+           langevin	(bool, True)
         returns:
            -
         '''
@@ -972,7 +974,7 @@ class ABM:
         '''Update momenta of extended variables with Velocity Verlet
 
         args:
-            langevin        (bool, True)
+            langevin	(bool, True)
         returns:
             -
         '''
@@ -987,7 +989,7 @@ class ABM:
 
     # -----------------------------------------------------------------------------------------------------
     def __get_cond_avg(self, a, hist):
-        '''get conditional average
+        '''get hist conditioned average of a
 
         args:
             a		   (array, -)
@@ -1003,7 +1005,7 @@ class ABM:
         '''numeric on-the-fly integration of thermodynamic force to obtain free energy estimate 
 
         args:
-            -
+            mean_force	    (array, -)
         returns:
             -
         '''
@@ -1018,12 +1020,12 @@ class ABM:
         self.__get_geom_correction()
 
     # -----------------------------------------------------------------------------------------------------
-    def __F_from_MtD(self, WT_dT, WT=True):
+    def __F_from_MtD(self, WT_dT=0.0, WT=True):
         '''on-the-fly free energy estimate from MtD or WT-MtD bias potential
 
         args:
-            WT              (bool, Well-Tempered MtD)
-            grid            (bool, bias pot and force already saved on grid)
+            WT_dT           (double, 0.0, only used if WT=True)
+            WT              (bool, True, Well-Tempered MtD)
         returns:
             -
         '''
@@ -1037,7 +1039,7 @@ class ABM:
     # -----------------------------------------------------------------------------------------------------
     def __F_from_CZAR(self):
         '''on-the-fly CZAR estimate of unbiased thermodynamic force
-           get unbiased free energy by integrating 
+           get unbiased free energy by integrating czar estimate 
         
         args:
             -
@@ -1067,7 +1069,7 @@ class ABM:
         '''get geometric free energy
 
         args:
-            extended	(bool, False, True for methods with extended system)
+            extended		(bool, False, True for methods with extended system)
         returns:
             -
         '''
@@ -1083,9 +1085,10 @@ class ABM:
            metadynamic/meta-eABF has to use grid!
 
         args:
-            MW_file             (string, path to MW buffer)
-            sync_interval       (int, intervall for sync with other walkers in steps)
-            trial               (int, counter for recursive call)
+            MW_file             (string, '../MW.dat', path to MW buffer)
+            sync_interval       (int, 20, intervall between syncs with other walkers in steps)
+            trial               (int, 0, don't change! internal used)
+
         returns:
             -
         '''
@@ -1202,13 +1205,19 @@ class ABM:
     
     # -----------------------------------------------------------------------------------------------------
     def __MW_update(self, new, old, walkers):
-        '''update accumulaters from MW buffer
+        '''update accumulators from MW buffer
         '''
         return walkers + (new - old)
 
     # -----------------------------------------------------------------------------------------------------
     def restart(self, filename='restart_bias.dat'):
         '''restart calculation from restart_bias.dat
+
+        args:
+            filename	(string, 'restart_bias.dat', filename for checkpoint file)
+
+        returns:
+            -
         '''
         if os.path.isfile(filename):
 
@@ -1256,7 +1265,8 @@ class ABM:
         '''write relevant data for restart to txt file
 
         args:
-            -
+            filename	(string, 'restart_bias.dat', filename for checkpoint file)
+ 
         returns:
             -
         '''
@@ -1293,6 +1303,7 @@ class ABM:
         '''write trajectory of extended or normal ABF
 
         args:
+            xi		  (double, -)
             extended      (bool, False)
         returns:
             -
@@ -1327,8 +1338,14 @@ class ABM:
             self.etraj = np.array([self.ext_coords])
 
     # -----------------------------------------------------------------------------------------------------
-    def write_output(self, filename='bias_out.dat'):
+    def write_output(self, filename='abm.out'):
         '''write output of free energy calculations
+
+        args:
+            filename	(string, 'abm.out', filename for output)
+ 
+        returns:
+            -
         '''
         if self.method == 'MtD' or self.method == 'ref':
             self.mean_force = self.bias
