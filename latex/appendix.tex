@@ -4,16 +4,17 @@
 \section{Definition of Collective Variables}
 \label{sec:reaction coordinates}
 
-In the present work distances, projected distances, angles and torsion angles between groups of atoms were used as collective variables for US, MtD, ABF, eABF or meta-eABF simulations.
-Below analytic expressions for the calculation of all CVs, their gradients, inverse gradients and divergence of inverse gradients are given.
+In the present work distances, projected distances, angles, and torsion angles between groups of atoms were used as collective variables for US, MtD, ABF, eABF, or meta-eABF simulations.
+Below analytic expressions for the calculation of all CVs, their gradients, inverse gradients, and divergence of inverse gradients are given.
 
 The center of mass $r^C$ of a group of $N$ atoms is calculated according to
 \begin{equation}
   r^C(\textbf{x}) = \frac{1}{M^C} \sum_{i=0}^N m_i r_i
 \end{equation}
-with mass of each atom $m_i$ and Cartesian coordinates $r_i = (x_i,y_i,z_i)$. $M^C$ is the mass of the group.
-All following collective variables are calculated between centers of mass. The index C will be dropped for convenience.
-To obtain derivatives of single atoms the gradient its corresponding group is weighted with $m_i/M$.
+with mass of each atom $m_i$ and cartesian coordinates $r_i = (x_i,y_i,z_i)$. $M^C$ is the mass of the group.
+All following collective variables are calculated between centers of mass. In the following only gradients between groups of atoms will be discussed and the index C will be dropped for convenience.
+The gradient of a single atom in a group is obtained by weighting the gradient of the group with $m_i/M^C$.
+
 The distances between group i and j is given by
 \begin{equation}
  r_{ij} = r_j - r_i
@@ -52,7 +53,7 @@ The gradient of $\theta$ is then given by
 \begin{equation}
   \frac{\partial \theta}{\partial r_j}= -\frac{\partial \theta}{\partial r_i} - \frac{\partial \theta}{\partial r_k}
 \end{equation}
-The torsion angle $\phi$ between four Cartesian coordinates ($r_i, r_j, r_k, r_l$) is given by:
+The torsion angle $\phi$ between four cartesian coordinates ($r_i, r_j, r_k, r_l$) is given by:
 \begin{equation}
   \tan \phi = \frac{(\hat{r}_{ij} \times n_1) \cdot n_2}{n_1 \cdot n_2}
 \end{equation}
@@ -63,7 +64,7 @@ with
 \begin{equation}
   n_2 = r_{kl} - (r_{kl} \cdot \hat{r}_{jk})\hat{r}_{jk}
 \end{equation}
-The derivative of $\phi$ in Cartesian coordinates is given by:
+The derivative of $\phi$ in cartesian coordinates is given by:
 \begin{equation}
   \frac{\partial\phi}{\partial r_i} = - \frac{\hat{r}_{ji}\times\hat{r}_{jk}}{\|r_{ij}\|\sin^2\theta_{ijk}}
 \end{equation}
@@ -91,35 +92,48 @@ Always choosing as inverse gradient $\textbf{v}(\xi) = \nabla \xi/\|\nabla \xi \
 \begin{equation}
   \nabla \cdot \textbf{v}(\phi) = 0,
 \end{equation}
-for distances, projected distances, angles and dihedrals, respectively.
+for distances, projected distances, angles, and dihedrals, respectively.
 
-\section{Numerical Examples}
+\section{Parameters for 2D Potentials}
 \label{sec:num examples}
 
-To test adaptive biasing methods the 2D test potentials $U_1$ and $U_2$ were used. For numerical tests of adaptive biasing methods a particle with a mass of 10~a.u. is simulated according to Algorithm \ref{alg:ABM} with a step size of 5 fs and at a temperature of 300~K.
-\begin{equation}
-  U_1(x,y) = a(x-c)^2(x+d)^2 + by^2 \label{eq:U1}
-\end{equation}
-\begin{equation}
-  U_2(x,y) = -\ln\bigl( e^{-a(x-c)^2 - b(y-d)^2} + e^{-a(x+c)^2 - b(y+d)^2} \bigr) \label{eq:U2S}
-\end{equation}
 \begin{table}[H]
-        \centering
-        \caption{Free Parameters for definition of $U_1$ and $U_2$.}
-        \begin{tabular}{ c | c  c  c  c }
-                & a & b & c & d   \\
-                \hline
-                $U_1$  & $8.0e-6$ kJ/mol & $0.5$ kJ/mol & 80 Bohr & 160 Bohr \\
-                $U_2$  & $0.005$ kJ/mol  & $0.040$ kJ/mol & 40 Bohr & 20 Bohr \\
-        \end{tabular}
-        \label{tab:2D pots}
+      \centering
+         \caption{Free Parameters for definition of $U_1$ and $U_2$.}
+         \begin{tabular}{ c | c  c  c  c }
+                 & a & b & c & d   \\
+                 \hline
+                 $U_1$  & $8.0e-6$ kJ/mol & $0.5$ kJ/mol & 80 Bohr & 160 Bohr \\
+                 $U_2$  & $0.005$ kJ/mol  & $0.040$ kJ/mol & 40 Bohr & 20 Bohr \\
+      \end{tabular}
+      \label{tab:2D pots}
 \end{table}
 
+\section{2D PMF of $U_2$}
+\begin{table}[H]
+      \centering
+         \caption{Input parameters for adaptive biasing calculations of section~\ref{sec:2D}}
+         \begin{tabular}{ c | c  c  c  c  c c c c}
+                 & $\Delta x$,$\Delta y$ & $\sigma_{G,x}$,$\sigma_{G,y}$ & $W$ & $\tau_G$ & $\Delta T$ & $N_{full}$ & $\sigma_{\lambda_{x}}$,$\sigma_{\lambda_y}$ & $m_x$,$m_y$   \\
+                 \hline
+            Unbiased & 2.5 Bohr & - & - & - & - & - & - & - \\
+            MtD      & 0.5 Bohr & 2.0 Bohr & 0.2 kJ/mol & 20 steps & - & - & - & - \\
+            WTM      & 0.5 Bohr & 2.0 Bohr & 0.2 kJ/mol & 20 steps & 2000 K & - & - & - \\
+            ABF      & 2.5 Bohr &  -       & -          & -        & -      & 100 & - & - \\
+            eABF     & 2.5 Bohr &  -       & -          & -        & -      & 100 & 2.5 Bohr & 20 a.u. \\
+            WTM-eABF & 2.5 Bohr & 2.0 Bohr & 0.2 kJ/mol & 20 steps & 2000 K & 100 & 2.5 Bohr & 20 a.u. \\
+      \end{tabular}
+      \label{tab:2D params}
+\end{table}
 \begin{figure}[H]
-    \centering
-    \vspace{-1cm}
-    \subfloat[$U_1$]{{\includegraphics[width=0.49\textwidth]{bilder/U1} }}
-    \subfloat[$U_2$]{{\includegraphics[width=0.49\textwidth]{bilder/U2} }}
-    \caption{Potentials for test calculations}
-\label{fig:potentials}%
+  \centering
+  \includegraphics[width=0.95\textwidth]{bilder/test_2D/reference_freeE} \\
+  \includegraphics[width=0.95\textwidth]{bilder/test_2D/metaD_freeE} \\
+  \includegraphics[width=0.95\textwidth]{bilder/test_2D/WTM_freeE} \\
+  \includegraphics[width=0.95\textwidth]{bilder/test_2D/ABF_freeE}  \\
+  \includegraphics[width=0.95\textwidth]{bilder/test_2D/eABF_freeE} \\
+  \includegraphics[width=0.95\textwidth]{bilder/test_2D/meta_eABF_freeE}
+  \caption{
+  Snapshot of the PMFs computed from a single trajectory with unbiased dynamics and different adaptive biasing algorithms after 1, 3 and 5~ns in potential $U_2$. Details are given in the appendix.}
+\label{fig:2D ABF}%
 \end{figure}

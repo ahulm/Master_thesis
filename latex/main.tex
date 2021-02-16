@@ -32,7 +32,7 @@
 	labelfont={bf},
 	margin=1cm,
 	aboveskip=5pt,
-	belowskip=5pt
+	belowskip=5pt,
 	]{caption,subfig}                          % mehrzeilige Captions ausrichten; subfig: Untergrafiken
 \usepackage{wrapfig}
 
@@ -91,9 +91,9 @@ minimum height=1.5em, text width=2em]
 
 \pdfoutput=1
 \usepackage[pdftex,  % muss letztes Package sein!
-	pdftitle={Perovscites for Photovoltaics},%
+	pdftitle={Masterthesis},%
 	pdfauthor={Andreas Hulm},%
-	pdfsubject={Perovscites},%
+	pdfsubject={free energy},%
 	pdfkeywords={ ... },%
 	pdfstartview={FitH},%
 	pdfstartpage={5},%
@@ -302,7 +302,7 @@ minimum height=1.5em, text width=2em]
 	\mainmatter                   % den Hauptteil beginnen
 	\pagenumbering{arabic}        % ab hier wieder arabische Nummerierung
 
-	%\include{introduction}
+	\include{introduction}
 	\include{theory}
   \include{comp_details}
 	\include{results}
