@@ -4,24 +4,30 @@ import scipy.optimize as opt
 from scipy import interpolate 
 import time
 
-H_in_kJmol = 2625.499639
-R          = 8.314 # J/(K*mol)
-T          = 300   # K
-RT         = R*T/1000.0 # kJ / mol
-RT_au      = RT/2625.5
-kB         = 1.380648e-23      # J / K
-H_to_J     = 4.359744e-18      #
-kB_a       = kB / H_to_J       # Hartree / K
+H_in_kJmol = 2625.499639  #
+R          = 8.314        # J/(K*mol)
+RT         = R*T/1000.0   # 
+RT_au      = RT/2625.5    # 
+kB         = 1.380648e-23 # J / K
+H_to_J     = 4.359744e-18 #
+kB_a       = kB / H_to_J  # Hartree / K
 
 class FEM:
-    '''integration of 2D ABF gradients with finite element method
+    '''integration of ABF gradients with the finite element method to get 2D PMFs
+       reads themodynamic forces from outout of ABF calculation 
+ 
+    args:
+        T               (double, temperature of free energy calculation)
+        inputname	(string, filename of input)
+        outputname	(string, filename for output)
     '''
-    def __init__(self, inputname='bias_out.dat', outputname='free_energy'):
+    def __init__(self, T=300, inputname='abm.out', outputname='free_energy'):
         
-        print("\n#######################################################")
-        print("\tFEM integration of 2D ABF data")
-        print("#######################################################\n")
-        print("Initialize spline functions.\n")
+        out = open("FEM.out", "w")
+        out.write("\n#######################################################\n")
+        out.write("\tFEM integration of 2D ABF data\n")
+        out.write("#######################################################\n\n")
+        out.write("Initialize spline functions.\n\n")
         
         self.outname = outputname        
         data = np.loadtxt(inputname, skiprows=1)
@@ -58,13 +64,13 @@ class FEM:
         
         # coefficient matrix
         self.alpha = np.full((int(self.x_bins*self.y_bins),), 0.0, dtype=np.float)
-        print("%30s:\t%8d" % ("Number of coefficients", self.alpha.size))
+        out.write("%30s:\t%8d\n" % ("Number of coefficients", self.alpha.size))
         
         # interploate gradient to control points
         origD = [data[:,3].reshape(self.y_bins, self.x_bins), data[:,4].reshape(self.y_bins, self.x_bins)]
         D = [np.zeros(shape=(self.leny,self.lenx), dtype=np.float), np.zeros(shape=(self.leny,self.lenx), dtype=np.float)]
         for xy in range(2):
-            D[xy][::4,::4] = origD[xy]
+            D[xy][::4, ::4] = origD[xy]
             D[xy][::4,2::4] = 0.5*D[xy][::4,:-4:4] + 0.5*D[xy][::4,4::4] 
             D[xy][::4,1::4] = 0.5*D[xy][::4,2::4]  + 0.5*D[xy][::4,:-4:4]
             D[xy][::4,3::4] = 0.5*D[xy][::4,2::4]  + 0.5*D[xy][::4,4::4] 
@@ -73,7 +79,7 @@ class FEM:
             D[xy][3::4]     = 0.5*D[xy][2::4]      + 0.5*D[xy][4::4] 
         self.D = np.asarray(D) * H_in_kJmol 
         self.D = self.D[:,:-1,:-1]
-        print("%30s:\t%8d" % ("Elements in gradient matrix", self.D.size))
+        out.write("%30s:\t%8d\n" % ("Elements in gradient matrix", self.D.size))
         
         # initialize pyramid functions 
         self.B = []
@@ -86,7 +92,91 @@ class FEM:
         self.B = np.asarray(self.B)
         self.gradB = np.asarray(self.gradB)
         self.gradB = self.gradB[:,:,:-1,:-1]
-        print("%30s:\t%8d" % ("Elements in gradB matrix", self.gradB.size))
+        out.write("%30s:\t%8d\n" % ("Elements in gradB matrix", self.gradB.size))
+        out.close()
+
+    #--------------------------------------------------------------------------------------
+    def BFGS(self, maxiter=15000, ftol=1e-10, gtol=1e-5, error_function='rmsd'):
+        '''BFGS minimization of error function
+
+        args:
+            maxiter		(int, 15000, maximum iterations of minimization)
+            ftol        	(double, 1e-10, tolerance for error function)
+            gtol		(double, 1e-5, tolerance for gradient)
+            error_function	(string, rmsd, available is rmsd or power)
+
+        returns:
+            -
+        '''        
+        out = open("FEM.out", "a")
+        if error_function == 'rmsd':
+            out.write("\nerror = RMSD\n")
+            self.error = self.error_rmsd
+        else:
+            out.write("\nerror = diff^2\n")
+            self.error = self.error_power 
+ 
+        options={
+            'disp': True,
+            'gtol': gtol,
+            'maxiter': maxiter,
+        }
+        
+        self.it = 0
+        self.err0 = 0
+        err = self.error(self.alpha) 
+        err0 = err
+        
+        out.write("\nStarting BFGS optimization of coefficents.\n")
+        out.write("--------------------------------------------------------\n")
+        out.write("%6s\t%14s\t%14s\t%14s\n" % ("Iter", "Error [kJ/mol]", "Change Error", "Wall Time [s]")) 
+        out.write("--------------------------------------------------------\n")
+        out.write("%6d\t%14.6f\t%14.6f\t%14.6f\n" % (self.it, err, 0.0, 0.0)) 
+        out.close()
+
+        self.start = time.perf_counter()
+        result = opt.minimize(self.error, self.alpha, method='BFGS', tol=ftol, callback=self.BFGS_progress, options=options)
+        
+        self.alpha = result.x
+        self.get_F()
+
+    #----------------------------------------------------------------------------------------
+    def error_power(self, alpha):
+        '''error function  
+        '''
+        a_gradB = np.zeros(shape=self.gradB.shape[1:])
+        for ii, a in enumerate(alpha):
+            a_gradB += a*self.gradB[ii]
+        a_gradB_D = a_gradB - self.D
+        return np.power(a_gradB_D, 2).sum()
+
+    #--------------------------------------------------------------------------------------
+    def error_rmsd(self, alpha):
+        '''error function
+        '''
+        a_gradB = np.zeros(shape=self.gradB.shape[1:])
+        for ii, a in enumerate(alpha):
+            a_gradB += a*self.gradB[ii]
+        a_gradB_D = a_gradB - self.D
+        err = np.power(a_gradB_D, 2).sum(axis=0)
+        err = err.mean()
+        return np.sqrt(err)
+
+    #--------------------------------------------------------------------------------------
+    def BFGS_progress(self, alpha):
+         '''callback function to display BFGS progress
+         ''' 
+         out = open("FEM.out", "a")
+         self.it += 1
+         err = self.error(alpha)
+         out.write("%6d\t%14.6f\t%14.6f\t%14.6f\n" % (self.it, err, err-self.err0, time.perf_counter()-self.start))
+         self.err0 = err
+
+         self.alpha = alpha
+         self.get_F()
+         self.start = time.perf_counter()        
+         
+         out.close()
 
     #----------------------------------------------------------------------------------------
     def pyramid(self, x, y, dx, dy, cx, cy):
@@ -132,74 +222,6 @@ class FEM:
                         deriv_y[ii, jj] = (-1.0/dy)*((cx - val_x)/dx + 1)
         #
         return [deriv_x, deriv_y]
-
-    #----------------------------------------------------------------------------------------
-    def error_power(self, alpha):
-        '''
-        '''
-        a_gradB = np.zeros(shape=self.gradB.shape[1:])
-        for ii, a in enumerate(alpha):
-            a_gradB += a*self.gradB[ii]
-        a_gradB_D = a_gradB - self.D
-        return np.power(a_gradB_D, 2).sum()
-
-    #--------------------------------------------------------------------------------------
-    def error_rmsd(self, alpha):
-        '''
-        '''
-        a_gradB = np.zeros(shape=self.gradB.shape[1:])
-        for ii, a in enumerate(alpha):
-            a_gradB += a*self.gradB[ii]
-        a_gradB_D = a_gradB - self.D
-        err = np.power(a_gradB_D, 2).sum(axis=0)
-        err = err.mean()
-        return np.sqrt(err)
-
-    #--------------------------------------------------------------------------------------
-    def BFGS(self, maxiter=15000, ftol=1e-10, gtol=1e-5, error_function='power'):
-        '''BFGS minimization of error function
-        '''        
-        if error_function == 'rmsd':
-            print("\nerror = RMSD")
-            self.error = self.error_rmsd
-        else:
-            print("\nerror = diff^2")
-            self.error = self.error_power 
- 
-        options={
-            'disp': True,
-            'gtol': gtol,
-            'maxiter': maxiter,
-        }
-        
-        self.it = 0
-        self.err0 = 0
-        err = self.error(self.alpha) 
-        err0 = err
-        
-        print("\nStarting BFGS optimization of coefficents.")
-        print("--------------------------------------------------------")
-        print("%6s\t%14s\t%14s\t%14s" % ("Iter", "Error [kJ/mol]", "Change Error", "Wall Time [s]")) 
-        print("--------------------------------------------------------")
-        print("%6d\t%14.6f\t%14.6f\t%14.6f" % (self.it, err, 0.0, 0.0)) 
-
-        self.start = time.perf_counter()
-        result = opt.minimize(self.error, self.alpha, method='BFGS', tol=ftol, callback=self.BFGS_progress, options=options)
-        
-        self.alpha = result.x
-        self.get_F()
-
-    #--------------------------------------------------------------------------------------
-    def BFGS_progress(self, alpha):
-         '''callback function to display BFGS progress
-         ''' 
-         self.it += 1
-         err = self.error(alpha)
-         print("%6d\t%14.6f\t%14.6f\t%14.6f" % (self.it, err, err-self.err0, time.perf_counter()-self.start))
-         self.err0 = err
-         self.start = time.perf_counter()        
-
-         return False
 
     #--------------------------------------------------------------------------------------
     def get_F(self):

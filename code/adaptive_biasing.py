@@ -6,20 +6,14 @@ import numpy as np
 
 from CVs import * 
 
-# bohr to angstrom
-bohr2angs   = 0.52917721092e0   # 
-
-# energy units
-kB          = 1.380648e-23      # J / K
-H_to_kJmol  = 2625.499639       #
-H_to_J      = 4.359744e-18      #
-kB_a        = kB / H_to_J       # Hartree / K
-H2au        = 2.921264912428e-8 # 
-au2k        = 315775.04e0       # 
-
-# time units
-it2fs       = 1.0327503e0       # fs per iteration
-fs2au       = 41.341374575751   # a.u. per fs
+# constants
+H_to_kJmol = 2625.499639       #
+kB         = 1.380648e-23      # J / K
+H_to_J     = 4.359744e-18      #
+kB_a       = kB / H_to_J       # Hartree / K
+au2k       = 315775.04e0       # 
+it2fs      = 1.0327503e0       # fs per iteration
+bohr2angs  = 0.52917721092e0   #
 
 class ABM:
     '''Class for adaptive biasing methods for 1D or 2D collective variables (CVs)
@@ -37,7 +31,7 @@ class ABM:
  				N_full:     Linear ramp function (bias *= N_k/N_full if N_full > N_k else 1) 
  
         MtD             Metadynamics or Well-Tempered metadynamics for 1D or 2D CV's
-                        On-the-fly free energy estimate: dF= -(T+deltaT)/deltaT * V_bias
+                        On-the-fly free energy estimate: A(CV) = -(T+deltaT)/deltaT * U_bias
 
                         Parameters:
                         	variance:   Gaussian variance [Bohr or degree]
@@ -111,13 +105,9 @@ class ABM:
         # general parameters
         self.the_md   = MD
         self.method   = method
-        self.f_conf   = f_conf
         self.out_freq = output_freq
         self.friction = friction
         
-        # mass scaled coordinates
-        self.sqrt_m = np.sqrt(self.the_md.masses)
-   
         # definition of CVs 
         self.ncoords = len(CV)
         self.CV      = np.array([item[0] for item in CV])     
@@ -125,8 +115,9 @@ class ABM:
         self.maxx    = np.array([item[3] for item in CV])
         self.dx      = np.array([item[4] for item in CV])
 
-        self.atoms = [[] for i in range(self.ncoords)]
+        self.atoms    = [[] for i in range(self.ncoords)]
         self.is_angle = [False for i in range(self.ncoords)]
+        self.f_conf   = [f_conf/H_to_kJmol for i in range(self.ncoords)]
     
         for i in range(self.ncoords):
 
@@ -139,15 +130,22 @@ class ABM:
                 # use coordinates of atoms
                 self.atoms[i].append(CV[i][1]-1)
       
-	    # degree to rad 
+	    # unit conversion
             if self.CV[i] == 'angle' or self.CV[i] == 'torsion' or self.CV[i] == 'lin_comb_angles':
                 self.is_angle[i] = True
                 self.minx[i] = np.radians(self.minx[i])
                 self.maxx[i] = np.radians(self.maxx[i])
                 self.dx[i]   = np.radians(self.dx[i])
+            
+            else:
+                self.minx[i]   /= bohr2angs
+                self.maxx[i]   /= bohr2angs
+                self.dx[i]     /= bohr2angs
+                self.f_conf[i] *= bohr2angs*bohr2angs                
 
-        (xi, delta_xi, div_delta_xi) = self.__get_coord()
+        (xi, _, _) = self.__get_coord()
         self.traj = np.array([xi])
+        self.temp = np.array([self.the_md.temp])       
 
         # get number of bins
         self.nbins_per_dim = np.array([1,1])
@@ -170,13 +168,15 @@ class ABM:
             # setup extended system for eABF or meta-eABF
             
             # force constant  
-            sigma = np.array([item[5] for item in CV])
+            self.sigma = np.array([item[5] for item in CV])
             for i in range(self.ncoords):
-                if self.CV[i] == 'angle' or self.CV[i] == 'torsion' or self.CV[i] == 'lin_comb_angles':
-                    sigma[i] = np.radians(sigma[i])
-        
-            self.k = (kB_a*self.the_md.target_temp) / (sigma*sigma)
-            
+                if self.is_angle[i]:
+                    self.sigma[i] = np.radians(self.sigma[i])
+                else:
+                    self.sigma[i] /= bohr2angs
+
+            self.k = (kB_a*self.the_md.target_temp) / (self.sigma*self.sigma)
+
             # mass in a.u.
             self.ext_mass = np.array([item[6] for item in CV])
             
@@ -199,10 +199,10 @@ class ABM:
             for i in range(self.ncoords):
                 # initialize extended system at target temp of MD simulation
             
-                self.ext_momenta[i] = random.gauss(0.0,1.0)*np.sqrt(self.the_md.target_temp*self.ext_mass[i])
+                self.ext_momenta[i] = random.gauss(0.0,1.0)*np.sqrt(MD.target_temp*self.ext_mass[i])
                 TTT  = (np.power(self.ext_momenta, 2)/self.ext_mass).sum()
                 TTT /= (self.ncoords)
-                self.ext_momenta *= np.sqrt(self.the_md.target_temp/(TTT*au2k))
+                self.ext_momenta *= np.sqrt(MD.target_temp/(TTT*au2k))
             
             # accumulators for czar estimator
             self.force_correction_czar = np.copy(self.bias)
@@ -210,22 +210,26 @@ class ABM:
             
             if method == 'meta-eABF':
 
-                self.variance = np.array([item[5 if method == 'MtD' else 7] for item in CV])
+                self.variance = np.array([item[7] for item in CV])
                 for i in range(self.ncoords):
-                    if self.CV[i] == 'angle' or self.CV[i] == 'torsion' or self.CV[i] == 'lin_comb_angles':
+                    if self.is_angle[i]:
                         self.variance[i] = np.radians(self.variance[i])
-                    
+                    else:
+                        self.variance[i] /= bohr2angs                   
+ 
                 self.abfforce = np.copy(self.bias)
                 self.metapot  = np.zeros((self.nbins_per_dim[1],self.nbins_per_dim[0]), dtype=np.float64)
 
-        elif method == 'MtD' or method == 'meta-eABF':
+        elif method == 'MtD':
             # parameters for MtD or WT-MtD
            
-            self.variance = np.array([item[5 if method == 'MtD' else 7] for item in CV])
+            self.variance = np.array([item[5] for item in CV])
             for i in range(self.ncoords):
-              if self.CV[i] == 'angle' or self.CV[i] == 'torsion' or self.CV[i] == 'lin_comb_angles':
-                  self.variance[i] = np.radians(self.variance[i])
-                    
+                if self.is_angle[i]:
+                    self.variance[i] = np.radians(self.variance[i])
+                else:
+                    self.variance[i] /= bohr2angs          
+ 
             self.metapot  = np.zeros((self.nbins_per_dim[1],self.nbins_per_dim[0]), dtype=np.float64)
        
         else:
@@ -251,8 +255,9 @@ class ABM:
         '''
         start = time.perf_counter()
 
-        (xi, delta_xi, div_delta_xi) = self.__get_coord()
+        (xi, delta_xi, _) = self.__get_coord()
         self.traj = np.append(self.traj, [xi], axis = 0)
+        self.temp = np.append(self.temp, self.the_md.temp)        
 
         if (xi <= self.maxx).all() and (xi >= self.minx).all():
 
@@ -267,12 +272,13 @@ class ABM:
             for i in range(self.ncoords):
 
                 # confinement
-                max_diff = self.__diff_angles(self.maxx[i], xi[i]) 
-                min_diff = self.__diff_angles(self.minx[i], xi[i])
-                if abs(max_diff) < abs(min_diff):
-                    self.the_md.forces -= self.f_conf/H_to_kJmol * max_diff * delta_xi[i]
-                else:
-                    self.the_md.forces -= self.f_conf/H_to_kJmol * min_diff * delta_xi[i]
+                if xi[i] > self.maxx[i]:
+                    diff = self.__diff(self.maxx[i], xi[i], self.is_angle[i]) 
+                    self.the_md.forces -= self.f_conf[i] * diff/self.dx[i] * delta_xi[i]
+
+                elif xi[i] < self.minx[i]:
+                    diff = self.__diff(self.minx[i], xi[i], self.is_angle[i])
+                    self.the_md.forces -= self.f_conf[i] * diff/self.dx[i] * delta_xi[i]
 
         if self.the_md.step%self.out_freq == 0:
             # write output
@@ -330,14 +336,17 @@ class ABM:
             for i in range(self.ncoords):
 
                 # confinement
-                max_diff = self.__diff_angles(self.maxx[i], xi[i]) 
-                min_diff = self.__diff_angles(self.minx[i], xi[i])
-                if abs(max_diff) < abs(min_diff):
-                    self.the_md.forces -= self.f_conf/H_to_kJmol * max_diff * delta_xi[i]
-                else:
-                    self.the_md.forces -= self.f_conf/H_to_kJmol * min_diff * delta_xi[i]
+                if xi[i] > self.maxx[i]:
+                    diff = self.__diff(self.maxx[i], xi[i], self.is_angle[i]) 
+                    self.the_md.forces -= self.f_conf[i] * diff/self.dx[i] * delta_xi[i]
+
+                elif xi[i] < self.minx[i]:
+                    diff = self.__diff(self.minx[i], xi[i], self.is_angle[i])
+                    self.the_md.forces -= self.f_conf[i] * diff/self.dx[i] * delta_xi[i]
+
 
         self.traj = np.append(self.traj, [xi], axis = 0)
+        self.temp = np.append(self.temp, self.the_md.temp)        
 
         if self.the_md.step%self.out_freq == 0:
             # write output
@@ -353,7 +362,7 @@ class ABM:
         self.timing = time.perf_counter() - start
     
     #------------------------------------------------------------------------------------------------------
-    def MtD(self, gaussian_height=1.0, update_int=50, WT_dT=2000, WT=True, grid=False, write_traj=True):
+    def MtD(self, gaussian_height=1.0, update_int=50, WT_dT=2000, WT=True, grid=True, write_traj=True):
         '''Metadynamics and Well-Tempered Metadynamics
 
         args:
@@ -368,7 +377,7 @@ class ABM:
         '''
         start = time.perf_counter()
 
-        (xi, delta_xi, div_delta_xi) = self.__get_coord()
+        (xi, delta_xi, _) = self.__get_coord()
 
         if (xi <= self.maxx).all() and (xi >= self.minx).all():
             
@@ -378,27 +387,42 @@ class ABM:
             self.geom_corr[bink[1],bink[0]] += self.__get_gradient_correction(delta_xi)
                         
             # apply metadynamic bias 
-            bias = self.__get_MtD_bias(xi, bink, gaussian_height, update_int, self.the_md.step, WT_dT, WT, grid)
+            bias = self.__get_MtD_bias(xi, bink, gaussian_height, update_int, self.the_md.step, WT_dT, WT, grid, False)
             for i in range(self.ncoords):
                 self.CV_crit[i][bink[1],bink[0]] += abs(np.dot(delta_xi[i], self.the_md.forces))         
                 self.the_md.forces += bias[i] * delta_xi[i]
-        
-        else:
 
-            # if out of boundaries get bias of nearest bin 
-            bias = self.__confine_metadynamics()
+                # damp repulsion of systems out of bins with harmonic force near margin
+                if xi[i] < (self.minx[i]+2*self.dx[i]):
+                     
+                    diff = self.__diff(self.minx[i]+2*self.dx[i], xi[i], self.is_angle[i])
+                    self.the_md.forces -= self.f_conf[i] * diff/self.dx[i] * delta_xi[i]
+
+                elif xi[i] > (self.maxx[i]-2*self.dx[i]):
+
+                    diff = self.__diff(self.maxx[i]-2*self.dx[i], xi[i], self.is_angle[i])
+                    self.the_md.forces -= self.f_conf[i] * diff/self.dx[i] * delta_xi[i]
+
+        else:
+          
+            # get repulsive MtD potential outside of bins to avoid discontinuity of force
+            meta_force = self.__get_MtD_bias(xi, 0, gaussian_height, update_int, self.the_md.step, WT_dT, WT, False, True)
 
             for i in range(self.ncoords):
 
-                # confinement with bias of nearest bin plus harmonic restraining potential
-                max_diff = self.__diff_angles(self.maxx[i], xi[i]) 
-                min_diff = self.__diff_angles(self.minx[i], xi[i])
-                if abs(max_diff) < abs(min_diff):
-                    self.the_md.forces += bias[i] - self.f_conf/H_to_kJmol * max_diff * delta_xi[i]
-                else:
-                    self.the_md.forces += bias[i] - self.f_conf/H_to_kJmol * min_diff * delta_xi[i]
+                # confinement
+                if xi[i] > self.maxx[i]:
+
+                    diff = self.__diff(self.maxx[i]-2*self.dx[i], xi[i], self.is_angle[i]) 
+                    self.the_md.forces -= self.f_conf[i] * diff/self.dx[i] * delta_xi[i]
+
+                elif xi[i] < self.minx[i]:
+             
+                    diff = self.__diff(self.minx[i]+2*self.dx[i], xi[i], self.is_angle[i])
+                    self.the_md.forces -= self.f_conf[i] * diff/self.dx[i] * delta_xi[i]
 
         self.traj = np.append(self.traj, [xi], axis = 0)
+        self.temp = np.append(self.temp,self.the_md.temp)        
         
         if self.the_md.step%self.out_freq == 0:
             # write output
@@ -424,12 +448,14 @@ class ABM:
         '''
         start = time.perf_counter()
 
-        (xi, delta_xi, div_delta_xi) = self.__get_coord()
+        (xi, delta_xi, _) = self.__get_coord()
 
         self.__propagate_extended()
 
+        margin = 2*self.sigma
+
         if (self.ext_coords <= self.maxx).all() and (self.ext_coords >= self.minx).all():
-            # lambda conditioned bias        
+            # lambda conditioned bias force        
  
             la_bin = self.__get_bin(xi, extended = True)
             self.histogramm[la_bin[1],la_bin[0]] += 1
@@ -437,7 +463,7 @@ class ABM:
             for i in range(self.ncoords):
 
                 # harmonic coupling of extended coordinate to reaction coordinate
-                dxi                 = self.__diff_angles(self.ext_coords[i],xi[i])
+                dxi                 = self.__diff(self.ext_coords[i], xi[i], self.is_angle[i])
                 self.ext_forces[i]  = self.k[i] * dxi
                 self.the_md.forces -= self.k[i] * dxi * delta_xi[i]
                 
@@ -445,27 +471,40 @@ class ABM:
                 Rk = 1.0 if self.histogramm[la_bin[1],la_bin[0]] > N_full else self.histogramm[la_bin[1],la_bin[0]]/N_full
                 self.bias[i][la_bin[1],la_bin[0]] -= self.k[i] * dxi
                 self.ext_forces[i] += Rk * self.bias[i][la_bin[1],la_bin[0]]/self.histogramm[la_bin[1],la_bin[0]]
+
+                # confinement of extended variable with harmonic force near margin
+                if self.ext_coords[i] < (self.minx[i]+margin[i]):
+                    
+                    diff = self.__diff(self.minx[i]+margin[i], self.ext_coords[i], self.is_angle[i])
+                    self.ext_forces[i] -= self.f_conf[i] * diff/self.dx[i]
+
+                elif self.ext_coords[i] > (self.maxx[i]-margin[i]):
+ 
+                    diff = self.__diff(self.maxx[i]-margin[i], self.ext_coords[i], self.is_angle[i])
+                    self.ext_forces[i] -= self.f_conf[i] * diff/self.dx[i]
                   
         else:
-            # confinement of extended coordinate
 
             for i in range(self.ncoords):
 
                 # harmonic coupling
-                dxi                 = self.__diff_angles(self.ext_coords[i],xi[i])
+                dxi                 = self.__diff(self.ext_coords[i],xi[i], self.is_angle[i])
                 self.ext_forces[i]  = self.k[i] * dxi
                 self.the_md.forces -= self.k[i] * dxi * delta_xi[i]
 
                 # confinement of extended coordinate
-                max_diff = self.__diff_angles(self.maxx[i], self.ext_coords[i]) 
-                min_diff = self.__diff_angles(self.minx[i], self.ext_coords[i])
-                if abs(max_diff) < abs(min_diff):
-                    self.ext_forces -= self.f_conf/H_to_kJmol * max_diff
-                else:
-                    self.ext_forces -= self.f_conf/H_to_kJmol * min_diff
+                if self.ext_coords[i] > self.maxx[i]:
+
+                    diff = self.__diff(self.maxx[i]-margin[i], self.ext_coords[i], self.is_angle[i])
+                    self.ext_forces[i] -= self.f_conf[i] * diff/self.dx[i]
+
+                elif self.ext_coords[i] < self.minx[i]:
+
+                    diff = self.__diff(self.minx[i]+margin[i], self.ext_coords[i], self.is_angle[i])
+                    self.ext_forces[i] -= self.f_conf[i] * diff/self.dx[i]
         
         if (xi <= self.maxx).all() and (xi >= self.minx).all():
-            # xi-conditioned accumulators 
+            # xi-conditioned accumulators for CZAR  
            
             bink = self.__get_bin(xi)
             self.hist_z[bink[1],bink[0]] += 1
@@ -476,23 +515,14 @@ class ABM:
 
                 self.CV_crit[i][bink[1],bink[0]] += abs(np.dot(delta_xi[i], self.the_md.forces))         
 
-                dx = self.__diff_angles(self.ext_coords[i], self.grid[i][bink[i]])
+                dx = self.__diff(self.ext_coords[i], self.grid[i][bink[i]], self.is_angle[i])
                 self.force_correction_czar[i][bink[1],bink[0]] += self.k[i] * dx 
          
-        else:
-            # confinement of physical coordinate
-
-            max_diff = self.__diff_angles(self.maxx[i], xi[i]) 
-            min_diff = self.__diff_angles(self.minx[i], xi[i])
-            if abs(max_diff) < abs(min_diff):
-                self.the_md.forces -= self.f_conf/H_to_kJmol * max_diff * delta_xi[i]
-            else:
-                self.the_md.forces -= self.f_conf/H_to_kJmol * min_diff * delta_xi[i]
-                    
         self.__up_momenta_extended()
 
-        self.traj  = np.append(self.traj, [xi], axis = 0)
-        self.etraj  = np.append(self.etraj, [self.ext_coords], axis = 0)
+        self.traj = np.append(self.traj, [xi], axis = 0)
+        self.etraj = np.append(self.etraj, [self.ext_coords], axis = 0)
+        self.temp = np.append(self.temp, self.the_md.temp)        
 
         if self.the_md.step%self.out_freq == 0:
             # write output 
@@ -516,7 +546,8 @@ class ABM:
             update_int          (int,    20,   intevall for deposition of gaussians in steps)
             WT                  (bool,   True, use Well-Tempered metadynamics)
             WT_dT               (double, 2000, only used if WT=True) 
-            grid                (bool,   True, store metadynamic bias on grid between function calls)
+            grid                (bool,   True, accumulate metadynamic bias force on grid)
+            dynamic_conf        (bool,   True, probability that system leafs bins fixed to 3.0e-7)
             write_traj          (bool,   True, write trajectory to CV_traj.dat)
 
         returns:
@@ -524,83 +555,87 @@ class ABM:
         '''
         start = time.perf_counter()
 
-        (xi, delta_xi, div_delta_xi) = self.__get_coord()
+        (xi, delta_xi, _) = self.__get_coord()
 
         self.__propagate_extended()
 
-        self.traj  = np.append(self.traj, [xi], axis = 0)
-        self.etraj  = np.append(self.etraj, [self.ext_coords], axis = 0)
+        margin = 2*self.sigma
 
         if (self.ext_coords <= self.maxx).all() and (self.ext_coords >= self.minx).all():
-          
+
             la_bin = self.__get_bin(xi, extended = True)
 
             self.histogramm[la_bin[1],la_bin[0]] += 1
-            meta_force = self.__get_MtD_bias(self.ext_coords, la_bin, gaussian_height, update_int, self.the_md.step, WT_dT, WT, grid)
-            
+            meta_force = self.__get_MtD_bias(self.ext_coords, la_bin, gaussian_height, update_int, self.the_md.step, WT_dT, WT, grid, False)
+
             for i in range(self.ncoords):
 
                 # harmonic coupling of extended coordinate to reaction coordinate
-                dxi                 = self.__diff_angles(self.ext_coords[i], xi[i])
+                dxi                 = self.__diff(self.ext_coords[i], xi[i], self.is_angle[i])
                 self.ext_forces[i]  = self.k[i] * dxi
                 self.the_md.forces -= self.k[i] * dxi * delta_xi[i]
 
                 # metadynamics bias
                 self.ext_forces[i] += meta_force[i]
-      
+
                 # eABF bias
                 Rk = 1.0 if self.histogramm[la_bin[1],la_bin[0]] > N_full else self.histogramm[la_bin[1],la_bin[0]]/N_full
                 self.abfforce[i][la_bin[1],la_bin[0]] -= self.k[i] * dxi  
                 self.ext_forces[i] += Rk * self.abfforce[i][la_bin[1],la_bin[0]]/self.histogramm[la_bin[1],la_bin[0]]  
-            
-        else:
-          
-            # get repulsive MtD potential of nearest bin
-            metabias = self.__confine_metadynamics(extended=True)
+ 
+                # damp repulsion by MtD potential with harmonic force near margin
+                if self.ext_coords[i] < (self.minx[i]+margin[i]):
+                    
+                    diff = self.__diff(self.minx[i]+margin[i], self.ext_coords[i], self.is_angle[i])
+                    self.ext_forces[i] -= self.f_conf[i] * diff/self.dx[i]
 
+                elif self.ext_coords[i] > (self.maxx[i]-margin[i]):
+ 
+                    diff = self.__diff(self.maxx[i]-margin[i], self.ext_coords[i], self.is_angle[i])
+                    self.ext_forces[i] -= self.f_conf[i] * diff/self.dx[i]
+
+        else:
+
+            # get repulsive MtD potential outside of bins to avoid discontinuity of force
+            meta_force = self.__get_MtD_bias(self.ext_coords, 0, gaussian_height, update_int, self.the_md.step, WT_dT, WT, False, True)
+            
             for i in range(self.ncoords):
 
                 # harmonic coupling of CV and ext coord
-                dxi                 = self.__diff_angles(self.ext_coords[i], xi[i])
+                dxi                 = self.__diff(self.ext_coords[i], xi[i], self.is_angle[i])
                 self.ext_forces[i]  = self.k[i] * dxi
                 self.the_md.forces -= self.k[i] * dxi * delta_xi[i]
 
                 # confinement with MtD bias of nearest bin + harmonic restraing force
-                max_diff = self.__diff_angles(self.maxx[i], self.ext_coords[i]) 
-                min_diff = self.__diff_angles(self.minx[i], self.ext_coords[i])
-                if abs(max_diff) < abs(min_diff):
-                    self.ext_forces += metabias[i] - self.f_conf/H_to_kJmol * max_diff
-                else:
-                    self.ext_forces += metabias[i] - self.f_conf/H_to_kJmol * min_diff
+                if self.ext_coords[i] > self.maxx[i]:
+
+                    diff = self.__diff(self.maxx[i]-margin[i], self.ext_coords[i], self.is_angle[i])
+                    self.ext_forces[i] += meta_force[i] - self.f_conf[i] * diff/self.dx[i]
+
+                elif self.ext_coords[i] < self.minx[i]:
+
+                    diff = self.__diff(self.minx[i]+margin[i], self.ext_coords[i], self.is_angle[i])
+                    self.ext_forces[i] += meta_force[i] - self.f_conf[i] * diff/self.dx[i]
 
         if (xi <= self.maxx).all() and (xi >= self.minx).all():
+            # xi conditioned accumulators for CZAR
             
             bink = self.__get_bin(xi)
-            self.geom_corr[bink[1],bink[0]]  += self.__get_gradient_correction(delta_xi)
+            self.geom_corr[bink[1],bink[0]] += self.__get_gradient_correction(delta_xi)
 
-            # accumulators for czar estimator
             self.hist_z[bink[1],bink[0]] += 1
             for i in range(self.ncoords):
 
                 self.CV_crit[i][bink[1],bink[0]] += abs(np.dot(delta_xi[i], self.the_md.forces))         
 
-                dx = self.__diff_angles(self.ext_coords[i], self.grid[i][bink[i]])
+                dx = self.__diff(self.ext_coords[i], self.grid[i][bink[i]], self.is_angle[i])
                 self.force_correction_czar[i][bink[1],bink[0]] += self.k[i] * dx
         
-        else:
-            # confinement of physical coordinate
-
-            max_diff = self.__diff_angles(self.maxx[i], xi[i]) 
-            min_diff = self.__diff_angles(self.minx[i], xi[i])
-            if abs(max_diff) < abs(min_diff):
-                self.the_md.forces -= self.f_conf/H_to_kJmol * max_diff * delta_xi[i]
-            else:
-                self.the_md.forces -= self.f_conf/H_to_kJmol * min_diff * delta_xi[i]
-
         self.__up_momenta_extended()
 
         self.traj  = np.append(self.traj, [xi], axis = 0)
         self.etraj  = np.append(self.etraj, [self.ext_coords], axis = 0)
+        self.temp = np.append(self.temp, self.the_md.temp)        
 
         if self.the_md.step%self.out_freq == 0:
             # write output
@@ -626,58 +661,11 @@ class ABM:
         '''
         X = xi if extended == False else self.ext_coords
         
-        binX = [0,0]
+        binX = [-1,-1]
         for i in range(self.ncoords):
             binX[i] = int(np.floor(np.abs(X[i]-self.minx[i])/self.dx[i]))
         
         return binX
-
-    # -----------------------------------------------------------------------------------------------------
-    def __confine_metadynamics(self, extended = False):
-        '''get MtD bias of nearest bin, if system is out of bounds
-        ''' 
-        la_bin = self.__get_bin(xi, extended=extended)
- 
-        X = xi if extended == False else self.ext_coords
-       
-        bias = [0,0]
-        
-        # x out of bounds 
-        if X[0] < self.minx[0]:
-            for i in range(self.ncoords):
-                bias[i] += self.bias[i][0,la_bin[1]]
-
-        elif X[0] > self.maxx[0]:
-            for i in range(self.ncoords):
-                bias[i] += self.bias[i][-1,la_bin[1]]
-
-        # y out of bounds
-        elif X[1] < self.minx[1]:
-            for i in range(self.ncoords):
-                bias[i] += self.bias[i][la_bin[0],0]
-
-        elif X[1] < self.minx[1]:
-            for i in range(self.ncoords):
-                bias[i] += self.bias[i][la_bin[0],-1]
-
-        # both out of bounds
-        elif X[0] < self.minx[0] and X[1] < self.minx[1]:
-            for i in range(self.ncoords):
-                bias[i] += self.bias[i][0,0]
-
-        elif X[0] > self.maxx[0] and X[1] < self.minx[1]:
-            for i in range(self.ncoords):
-                bias[i] += self.bias[i][-1,0]
-
-        elif X[0] < self.minx[0] and X[1] > self.maxx[1]:
-            for i in range(self.ncoords):
-                bias[i] += self.bias[i][0,-1]
-
-        elif X[0] > self.maxx[0] and X[1] > self.maxx[1]:
-            for i in range(self.ncoords):
-                bias[i] += self.bias[i][-1,-1]
-
-        return bias
 
     # -----------------------------------------------------------------------------------------------------
     def __get_coord(self):
@@ -780,7 +768,7 @@ class ABM:
         return (xi, delta_xi, div)
 
     # -----------------------------------------------------------------------------------------------------
-    def __diff_angles(self, a, b):
+    def __diff(self, a, b, is_angle):
         '''returns difference of two angles in range (-pi,pi) or normal difference 
 
         args:
@@ -789,7 +777,7 @@ class ABM:
         returns:
             diff            (double, -, in rad)
         '''
-        if self.is_angle == True: 
+        if is_angle: 
             diff = a - b
             if diff < -np.pi:  diff += 2*np.pi
             elif diff > np.pi: diff -= 2*np.pi
@@ -798,8 +786,8 @@ class ABM:
         return diff
 
     # -----------------------------------------------------------------------------------------------------
-    def __get_MtD_bias(self, xi, bink, height, update_int, step, WT_dT, WT, grid):
-        '''get Bias Potential and Force as sum of Gaussian kernels
+    def __get_MtD_bias(self, xi, bink, height, update_int, step, WT_dT, WT, grid, out_of_bounds):
+        '''get Bias Potential and Force as sum of Gaussian hills
 
         args:
             xi              (float, -, CV)
@@ -809,23 +797,31 @@ class ABM:
             step            (int, -, md step)
             WT              (bool, -, use WT-MtD)
             grid            (bool, -, use grid for force)
+            out_of_bond     (bool, False, system outside of grid)
 
         returns:
             bias            (array, bias force per CV)
         '''
 	# update bias every update_int's step and save on grid for free energy calculation
-        # if grid == True this is also used as bias for dynamics 
+        # if grid == True also coarse graind force is used for bias of dynamics 
        
-        if self.ncoords == 1:
+        if self.ncoords == 1 and out_of_bounds == False:
             # 1D
+
             if step%int(update_int) == 0:
-        
+
+                # save centers to calculate bias in case system leafs bins
+                if step == 0:
+                    self.center = np.array([xi[0]])
+                else:
+                    self.center = np.append(self.center, xi[0])
+
                 w = height/H_to_kJmol
                 if WT == True:
                     w *= np.exp(-self.metapot[bink[1],bink[0]]/(kB_a*WT_dT))
         
                 for i in range(self.nbins_per_dim[0]):
-                    dx = self.__diff_angles(self.grid[0][i], xi[0])
+                    dx = self.__diff(self.grid[0][i], xi[0], self.is_angle[0])
                     if abs(dx) <= 3*self.variance[0]:
                         bias_factor = w * np.exp(-(dx*dx)/(2.0*self.variance[0]))
 
@@ -834,19 +830,27 @@ class ABM:
 
             bias = [self.bias[0][bink[1],bink[0]]]
  
-        else:
+        elif self.ncoords == 2 and out_of_bounds == False:
             # 2D
             if step%int(update_int) == 0:
+
+                # save centers to calculate bias in case system leafs bins
+                if step == 0:
+                    self.center_x = np.array([xi[0]])
+                    self.center_y = np.array([xi[1]])
+                else:
+                    self.center_x = np.append(self.center_x, xi[0])
+                    self.center_y = np.append(self.center_y, xi[1])
         
                 w = height/H_to_kJmol
                 if WT == True:
                     w *= np.exp(-self.metapot[bink[1],bink[0]]/(kB_a*WT_dT))
 
                 for i in range(self.nbins_per_dim[1]):
-                    dy = self.__diff_angles(self.grid[1][i], xi[1])
+                    dy = self.__diff(self.grid[1][i], xi[1], self.is_angle[1])
                     if abs(dy) <= 3*self.variance[1]:
                         for j in range(self.nbins_per_dim[0]):
-                            dx = self.__diff_angles(self.grid[0][j], xi[0])
+                            dx = self.__diff(self.grid[0][j], xi[0], self.is_angle[0])
                             if abs(dx) <= 3*self.variance[0]:
                                 p1 = (dx*dx)/self.variance[0]  
                                 p2 = (dy*dy)/self.variance[1]
@@ -859,25 +863,22 @@ class ABM:
             bias = [self.bias[0][bink[1],bink[0]],self.bias[1][bink[1],bink[0]]] 
 
         if grid == False:
-            # get exact bias force every step
+            # get exact bias force of step
             # can become slow in long simulations 
             # TODO: use sorted dx for speedup          
 
             bias_factor = 0.0
             if self.ncoords == 1:
                 # 1D                
-                if step == 0:
-                    self.center = np.array([xi[0]])
-                    self.steps_in_bins = 0
-    
-                elif step%int(update_int) == 0:
-                    self.center = np.append(self.center, xi[0])
                 
+                if self.the_md.step == 0 and out_of_bounds == True:
+                    self.center = np.array([])
+
                 bias = [0.0]
                 w0 = height/H_to_kJmol
 
                 for ii, val in enumerate(self.center):
-                    dx = self.__diff_angles(val,xi[0])                   
+                    dx = self.__diff(val,xi[0], self.is_angle[0])                   
                     if abs(dx) <= 3*self.variance[0]:         	
 
                         w = w0
@@ -889,22 +890,19 @@ class ABM:
             
             else:
                 # 2D
-                if step == 0:
-                    self.center_x = np.array([xi[0]])
-                    self.center_y = np.array([xi[1]])
-               
-                elif step%int(update_int) == 0:
-                    self.center_x = np.append(self.center_x, xi[0])
-                    self.center_y = np.append(self.center_y, xi[1])
+
+                if self.the_md.step == 0 and out_of_bounds == True:
+                    self.center_x = np.array([])
+                    self.center_y = np.array([])
 
                 bias = [0.0,0.0] 
-
                 w0 = height/H_to_kJmol
-                for i in range(len(dx)):
-                    dx = self.__diff_angles(self.center_x[i], xi[0])
-                    if abs(dx[i]) <= 3*self.variance[0]:
-                        dy = self.__diff_angles(self.center_y[i], xi[1])          
-                        if abs(dy[i]) <= 3*self.variance[1]:
+             
+                for i, x in enumerate(self.center_x):
+                    dx = self.__diff(x, xi[0], self.is_angle[0])
+                    if abs(dx) <= 3*self.variance[0]:
+                        dy = self.__diff(self.center_y[i], xi[1], self.is_angle[1])          
+                        if abs(dy) <= 3*self.variance[1]:
 
                             w = w0
                             if WT == True:
@@ -913,11 +911,11 @@ class ABM:
                             exp1  = (dx*dx)/self.variance[0]  
                             exp2  = (dy*dy)/self.variance[1]
                             gauss = w * np.exp(-(exp1+exp2)/2.0)
-    
+
                             bias_factor += gauss
                             bias[0]     += gauss * dx/self.variance[0]
                             bias[1]     += gauss * dy/self.variance[1]
-        
+ 
         return bias
 
     # -----------------------------------------------------------------------------------------------------
@@ -931,18 +929,18 @@ class ABM:
             correction		(double, -, correction for current step)
         '''
         if self.ncoords == 1:
-            q = self.sqrt_m * delta_xi[0]
+            q = delta_xi[0]
             return np.linalg.norm(q)
 
         else:
             d = np.array([[0.0,0.0],[0.0,0.0]])
           
-            q0 = self.sqrt_m * delta_xi[0]
-            q1 = self.sqrt_m * delta_xi[1]
+            q0 = delta_xi[0]
+            q1 = delta_xi[1]
 
             d[0,0] = np.linalg.norm(q0)
             d[1,1] = np.linalg.norm(q1)
-            d[1,0] = d[0,1] = np.sqrt(np.dot(q0,q1))
+            d[1,0] = d[0,1] = np.sqrt(abs(np.dot(q0,q1)))
             return np.linalg.det(d)
 
     # -----------------------------------------------------------------------------------------------------
@@ -1015,8 +1013,8 @@ class ABM:
             # on-the-fly integration only for 1D reaction coordinate
 
             for i in range(1,self.nbins_per_dim[0]):
-                self.dF[0,i] = np.sum(mean_force[0][0,0:i]) * self.dx[0]
-
+                self.dF[0,i] = np.sum(mean_force[0][0,0:i]) * self.dx[0] 
+            
         self.__get_geom_correction()
 
     # -----------------------------------------------------------------------------------------------------
@@ -1048,14 +1046,14 @@ class ABM:
         '''
         self.mean_force = np.array([np.zeros((self.nbins_per_dim[1],self.nbins_per_dim[0])) for i in range(self.ncoords)], dtype=np.float64)
         
-        # get ln(rho) and z-conditioned average force per bin
+        # get ln(rho) and z-average force per bin
         log_rho   = np.log(self.hist_z, out=np.zeros_like(self.hist_z), where=(self.hist_z!=0))
         avg_force = self.__get_cond_avg(self.force_correction_czar, self.hist_z)         
         
         # czar estimate of thermodynamic force per bin 
         if self.ncoords == 1: 
-            self.mean_force[0]  = - kB_a * self.the_md.target_temp * np.gradient(log_rho[0], self.grid[0]) + avg_force[0]
-        
+            self.mean_force[0] = - kB_a * self.the_md.target_temp * np.gradient(log_rho[0], self.grid[0]) + avg_force[0]
+ 
         else:
             der_log_rho = np.gradient(log_rho, self.grid[1], self.grid[0])
             self.mean_force[0] = - kB_a * self.the_md.target_temp * der_log_rho[1] + avg_force[0]
@@ -1092,7 +1090,7 @@ class ABM:
         returns:
             -
         '''
-        if self.the_md.step == 0:
+        if self.the_md.step == 0 and trial == 0:
             print('-------------------------------------------------------------')
             print('\tNew Multiple-Walker Instance created!')
             print('-------------------------------------------------------------')
@@ -1179,10 +1177,10 @@ class ABM:
                     
                     if os.access(MW_file, os.W_OK):
                         self.write_restart(MW_file)
-                        print('Bias synced with {f}!'.format(MW_file))
+                        print('Bias synced with {f}!'.format(f=MW_file))
                      
                     else:
-                        print('Failed to sync bias with {f}!'.format(MW_file))
+                        print('Failed to sync bias with {f}!'.format(f=MW_file))
                                           
       
                     # set MW_file back to read only
@@ -1195,7 +1193,7 @@ class ABM:
                     self.MW(MW_file, sync_interval=sync_interval, trial=trial+1)
                  
                 else:
-                    print('Failed to sync bias with {f}!'.format(MW_file))
+                    print('Failed to sync bias with {f}!'.format(f=MW_file))
     
             else:
     
@@ -1259,7 +1257,7 @@ class ABM:
             print('-------------------------------------------------------------')
             print('\tRestart file not found.')  
             print('-------------------------------------------------------------')
-
+ 
     # -----------------------------------------------------------------------------------------------------
     def write_restart(self, filename='restart_bias.dat'):
         '''write relevant data for restart to txt file
@@ -1272,6 +1270,7 @@ class ABM:
         '''
         out = open(filename, "w")
         if self.ncoords == 1:
+            # for 1D CV
             for i in range(self.nbins_per_dim[0]):
                 row = (self.histogramm[0,i], self.geom_corr[0,i], self.bias[0][0,i], self.CV_crit[0][0,i])
                 out.write("%14.10f\t%14.10f\t%14.10f\t%14.10f" % row)
@@ -1284,9 +1283,10 @@ class ABM:
                 out.write('\n')
 
         else:
+            # for 2D CV
             for i in range(self.nbins_per_dim[1]):
                 for j in range(self.nbins_per_dim[0]):
-                    row = (self.histogramm[i,j], self.geom_corr[i,j], self.bias[0][i,j], self.bias[1][i,j], self.CV_crit[0][0,i], self.CV_crit[1][0,i])
+                    row = (self.histogramm[i,j], self.geom_corr[i,j], self.bias[0][i,j], self.bias[1][i,j], self.CV_crit[0][i,j], self.CV_crit[1][i,j])
                     out.write("%14.10f\t%14.10f\t%14.10f\t%14.10f\t%14.10f\t%14.10f" % row)
                     if self.method == 'MtD':
                         out.write('\t%14.10f' % (self.metapot[i,j]))
@@ -1300,7 +1300,7 @@ class ABM:
 
     # -----------------------------------------------------------------------------------------------------
     def write_traj(self, xi, extended = False):
-        '''write trajectory of extended or normal ABF
+        '''write trajectory of extended or normal ABF at output times
 
         args:
             xi		  (double, -)
@@ -1308,22 +1308,32 @@ class ABM:
         returns:
             -
         '''
+        # convert units to degree and Angstrom
         for i in range(self.ncoords):
-            if self.CV[i] == 'angle' or self.CV[i] == 'torsion' or self.CV[i] == 'lin_comb_angles':
-                self.traj  = np.degrees(self.traj)
-                if extended == True:
-                    self.etraj = np.degrees(self.etraj)
-            
+            if self.is_angle[i]: 
+                self.traj[:,i] = np.degrees(self.traj[:,i])
+                if extended:
+                    self.etraj[:,i] = np.degrees(self.etraj[:,i])
+            else:
+                self.traj[:,i] = self.traj[:,i] * bohr2angs 
+                if extended:
+                    self.etraj[:,i] = self.etraj[:,i] * bohr2angs
+
         if self.the_md.step == 0:
+            # start new file in first step
+
             traj_out = open("CV_traj.dat", "w")
             traj_out.write("%14s\t" % ("time [fs]"))
             for i in range(len(self.traj[0])):
                 traj_out.write("%14s\t" % (f"Xi{i}"))
                 if extended:
                     traj_out.write("%14s\t" % (f"eXi{i}"))
+            traj_out.write("%14s" % ("temp [K]"))
             traj_out.close()
-	
+
         else:
+            # append new steps of trajectory since last output
+ 
             traj_out = open("CV_traj.dat", "a")
             for n in range(self.out_freq):
                 traj_out.write("\n%14.6f\t" % ((self.the_md.step-self.out_freq+n)*self.the_md.dt*it2fs))
@@ -1331,9 +1341,12 @@ class ABM:
                     traj_out.write("%14.6f\t" % (self.traj[-self.out_freq+n][i]))
                     if extended:
                         traj_out.write("%14.6f\t" % (self.etraj[-self.out_freq+n][i]))
+                traj_out.write("%14.6f" % (self.temp[-self.out_freq+n]))
             traj_out.close()
     
-        self.traj  = np.array([xi])
+        # start new traj arrays for next output
+        self.traj = np.array([xi])
+        self.temp = np.array([self.the_md.temp]) 
         if self.method == 'eABF' or self.method == 'meta-eABF':
             self.etraj = np.array([self.ext_coords])
 
@@ -1349,14 +1362,17 @@ class ABM:
         '''
         if self.method == 'MtD' or self.method == 'ref':
             self.mean_force = self.bias
-
-        crit = self.__get_cond_avg(self.CV_crit, self.histogramm)
         
+        crit = self.CV_crit
+
+        # convert units of CV to degree or Angstrom
         grid = np.copy(self.grid)
         for i in range(self.ncoords):
-            if self.CV[i] =='angle' or self.CV[i] == 'torsion' or self.CV[i] == 'lin_comb_angles': 
+            if self.is_angle[i]: 
                 grid[i] = np.degrees(self.grid[i])
-        
+            else:
+                grid[i] = self.grid[i] * bohr2angs        
+
         out = open(filename, "w")
         if self.ncoords == 1:
             head = ("Xi1", "CV_crit", "Histogramm", "Bias", "dF", "geom_corr")
@@ -1394,25 +1410,25 @@ class ABM:
         '''
         for i in range(self.ncoords):
             print("\nInitialize {CV} for {m}:".format(CV=self.CV[i],m=self.method))
-            if self.CV[i] == 'angle' or self.CV[i] == 'torsion' or self.CV[i] == 'lin_comb_angles':
-                print("\n\tMinimum CV%d:\t\t%14.6f rad" % (i,self.minx[i]))
-                print("\tMaximum CV%d:\t\t%14.6f rad" % (i,self.maxx[i]))
-                print("\tBinwidth CV%d:\t\t%14.6f rad" % (i,self.dx[i]))
+            if self.is_angle[i]:
+                print("\n\tMinimum CV%d:\t\t%14.6f degree" % (i, np.degrees(self.minx[i])))
+                print("\tMaximum CV%d:\t\t%14.6f degree" % (i,   np.degrees(self.maxx[i])))
+                print("\tBinwidth CV%d:\t\t%14.6f degree" % (i,  np.degrees(self.dx[i])))
             else:
-                print("\n\tMinimum CV%d:\t\t%14.6f A" % (i,self.minx[i]))
-                print("\tMaximum CV%d:\t\t%14.6f A" % (i,self.maxx[i]))
-                print("\tBinwidth CV%d:\t\t%14.6f A" % (i,self.dx[i]))
-         
+                print("\n\tMinimum CV%d:\t\t%14.6f Angstorm" % (i,self.minx[i]*bohr2angs))
+                print("\tMaximum CV%d:\t\t%14.6f Angstrom" % (i,self.maxx[i]*bohr2angs))
+                print("\tBinwidth CV%d:\t\t%14.6f Angstrom" % (i,self.dx[i]*bohr2angs))
+        
         print("\t---------------------------------------------")
         print("\tTotel number of bins:\t%14.6f" % (self.nbins))
-
+        
         if self.method == 'eABF' or self.method == 'meta-eABF':
             print("\nInitialize extended Lagrangian:")
             for i in range(self.ncoords):
-                if self.CV[i] == 'angle' or self.CV[i] == 'torsion' or self.CV[i] == 'lin_comb_angles':
+                if self.is_angle[i]:
                     print("\n\tspring constant:\t%14.6f Hartree/rad^2" % (self.k[i]))
                 else:
-                    print("\n\tspring constant:\t%14.6f Hartree/A^2" % (self.k[i]))
+                    print("\n\tspring constant:\t%14.6f Hartree/a_0^2" % (self.k[i]))
                 print("\tfictitious mass:\t%14.6f a.u." % (self.ext_mass[i]))
 
 

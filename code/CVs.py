@@ -1,8 +1,6 @@
 import numpy as np
 import sys
 
-bohr2angs   = 0.52917721092e0    
-
 # -----------------------------------------------------------------------------------------------------
 def mass_center(MD, atoms):
     '''get center of mass and overall mass of group of atoms
@@ -45,14 +43,14 @@ def distance(self, atoms):
     '''distance between two mass centers in Angstrom in range(0, inf) 
     '''
     if len(atoms) != 2:
-        print("ERROR: Invalid number of centers in definition of CV!")
+        print("ERROR: Invalid number of centers in definition of distance!")
         sys.exit(0)
 
     (p1,m1) = mass_center(self.the_md, atoms[0])
     (p2,m2) = mass_center(self.the_md, atoms[1]) 
 
     # get distance
-    r12 = (p2-p1) * bohr2angs 
+    r12 = (p2-p1) 
     xi  = np.linalg.norm(r12)
     
     # get gradient
@@ -62,7 +60,7 @@ def distance(self, atoms):
     dxi = r12/xi
     grad_xi =- np.dot(dxi, w1)
     grad_xi += np.dot(dxi, w2)
-     
+
     return (xi, grad_xi)
 
 #-----------------------------------------------------------------------------------------------------
@@ -70,7 +68,7 @@ def projected_distance(self, atoms):
     '''distance between group 1 and 2 projected on vector between 2 3 in Angstrom in range(-inf,inf) 
     '''
     if len(atoms) != 3:
-        print("ERROR: Invalid number of centers in definition of CV!")
+        print("ERROR: Invalid number of centers in definition of projected distance!")
         sys.exit(0)
 
     (p1,m1) = mass_center(self.the_md, atoms[0])
@@ -78,8 +76,8 @@ def projected_distance(self, atoms):
     (p3,m3) = mass_center(self.the_md, atoms[2])
 
     # get projected distance
-    r12 = (p2-p1) * bohr2angs
-    r23 = (p3-p2) * bohr2angs
+    r12 = (p2-p1) 
+    r23 = (p3-p2) 
     
     e   = r23/np.linalg.norm(r23)
     xi  = np.dot(r12,e)
@@ -101,7 +99,7 @@ def angle(self, atoms):
     '''get angle between three mass centers in range(-pi,pi)
     '''    
     if len(atoms) != 3:
-        print("ERROR: Invalid number of centers in definition of CV!")
+        print("ERROR: Invalid number of centers in definition of angle!")
         sys.exit(0)
 
     (p1,m1) = mass_center(self.the_md, atoms[0])
@@ -144,7 +142,7 @@ def torsion(self, atoms):
     '''torsion angle between four mass centers in range(-pi,pi)
     '''
     if len(atoms) != 4:
-        print("ERROR: Invalid number of centers in definition of CV!")
+        print("ERROR: Invalid number of centers in definition of torsion!")
         sys.exit(0)
 
     (p1,m1) = mass_center(self.the_md, atoms[0])
@@ -272,31 +270,35 @@ def lin_comb_dists(self, i, atoms):
     '''
     CVs = np.array([])
     grad_CVs = np.zeros(3*self.the_md.natoms,dtype=np.float)
+   
     for index, CV in enumerate(atoms):
-
+        
         if len(CV) == 3:
-
+  
             # distance
+            a = CV[0] + 1.0 
             (x,dx) = distance(self, np.array(CV[1:]))
-          
-            CVs = np.append(CV[0]*CVs, x)
-            grad_CVs += CV[0]*dx
+            
+            CVs = np.append(CVs, a*x)
+            grad_CVs += a*dx
 
         elif len(CV) == 4:
-   
+
             # projected distance
+            a = CV[0] + 1.0
             (x,dx) = projected_distance(self, np.array(CV[1:]))
           
-            CVs = np.append(CV[0]*CVs, x)
-            grad_CVs += CV[0]*dx
+            CVs = np.append(CVs, a*x)
+            grad_CVs += a*dx
 
         else:
-            print("ERROR: Invalid number of centers in definition of CV!")
+            print("ERROR: Invalid number of centers in definition of distance!")
             sys.exit(0)
 
+    CV = CVs.sum()   
     write_lc_traj(i, CVs)
-  
-    return (CVs.mean(), grad_CVs) 
+     
+    return (CV, grad_CVs) 
 
 # -----------------------------------------------------------------------------------------------------
 def lin_comb_angles(self, i, atoms):
@@ -306,29 +308,33 @@ def lin_comb_angles(self, i, atoms):
     grad_CVs = np.zeros(3*self.the_md.natoms,dtype=np.float)
     for index, CV in enumerate(atoms):
 
-        if len(CV) == 3:
+        if len(CV) == 4:
 
             # angle
-            (x,dx) = angle(self, np.array(CV))
+            a = CV[0] + 1.0
+            (x,dx) = angle(self, np.array(CV[1:]))
 
-            CVs = np.append(CVs, x)
-            grad_CVs += dx
+            CVs = np.append(CVs, a*x)
+            grad_CVs += a*dx
         
-        elif len(CV) == 4:
+        elif len(CV) == 5:
 
             # torsion
-            (x,dx) = torsion(self, np.array(CV))
+            a = CV[0] + 1.0
+            (x,dx) = torsion(self, np.array(CV[1:]))
 
-            CVs = np.append(CVs, x)
-            grad_CVs += dx
+            CVs = np.append(CVs, a*x)
+            grad_CVs += a*dx
 
         else:
             print("ERROR: Invalid number of centers in definition of CV!")
             sys.exit(0)
-    
+
+    CV = CVs.sum()
+
     write_lc_traj(i, CVs)
 
-    return (CVs.mean(), grad_CVs) 
+    return (CV, grad_CVs) 
 
 # -----------------------------------------------------------------------------------------------------
 def lin_comb_hBonds(self, i, atoms):
