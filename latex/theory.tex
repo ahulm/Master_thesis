@@ -113,7 +113,7 @@ In the next section we will look at different approaches to eliminate both drawb
 \section{Adaptive Biasing Methods}
 \label{sec:adaptive biasing}
 
-Instead of dividing the reaction coordinate into several windows, with adaptive biasing methods the free energy can be estimated in one single simulation. For this purpose free energy barriers along the reaction coordinate are compensated by history-dependent biasing potentials or forces. In contrast to other importance sampling strategies like umbrella sampling, this methods require no knowledge of the PMF prior to the simulation, because the bias is not chosen manually. Instead, the biasing potential automatically adapts during the simulation to enable random walk dynamics and uniform sampling in CV space.\autocite{comer2015adaptive, barducci2011metadynamics}
+Instead of dividing the reaction coordinate into several windows, with adaptive biasing methods the PMF can be estimated in one single simulation. For this purpose free energy barriers along the reaction coordinate are compensated by history-dependent biasing potentials or forces. In contrast to other importance sampling strategies like umbrella sampling, this methods require no knowledge of the PMF prior to the simulation, because the bias is not chosen manually. Instead, the biasing potential automatically adapts during the simulation to enable random walk dynamics and uniform sampling in CV space.\autocite{comer2015adaptive, barducci2011metadynamics}
 
 There are multiple adaptive biasing methods available, only differing in the construction of the bias. Potential based methods like metadynamics (MtD) disfavor already visited states by accumulating repulsive potentials along the CV (section \ref{sec:metaD}), while adaptive biasing force (ABF) methods compensate the mean force along the reaction coordinate (section \ref{sec:ABF}). Finally, as discussed in section \ref{sec:eABF}, using an extended Lagrangian, the technical requirements of ABF can be lifted without loosing its rigorous convergence behavior.\autocite{lesage2017smoothed} Additionally, this framework enables the combination of repulsive MtD potentials with ABF (meta-eABF/WTM-eABF), to unite the benefits of both approaches.\autocite{fu2018zooming,fu2019taming}
 
@@ -263,13 +263,17 @@ Coefficients $\alpha_l$ are obtained by minimizing the root mean square deviatio
   RMSD(\vec{\alpha})=\sqrt{\frac{1}{M}\sum_i^M\biggl(\bigl(\sum_l \alpha_l \nabla B_l(\xi_i)\bigr) - \braket{F(\xi_i)} \biggr)^2}
   \label{eq:RMSD}
 \end{equation}
+\begin{equation}
+\text{Error}=\sum_i^M\biggl|\bigl(\sum_l \alpha_l \nabla B_l(\xi_i)\bigr) - \braket{F(\xi_i)} \biggr|^2
+  \label{eq:power}
+\end{equation}
 with some numerical minimization routine (e.g., BFGS algorithm\autocite{nocedal2006numerical}) for force estimates of all dimensions.\autocite{darve2008adaptive} To increase the smoothness of the reconstructed free energy surface in practice, four control points per bin and dimension are chosen between data points. Force estimates for the control points are obtained by linear interpolation between original data points. Figure~\ref{fig:FEM} shows illustrative examples for the application of B-spline functions in the FEM method.
 \begin{figure}[H]
     \centering
     \includegraphics[width=1\textwidth]{bilder/FEM}
     \caption{
       On the left an example for the approximation of an 1D PMF by triangular B-spline functions is shown.
-      Right: Illustration of B-spline functions used for integration of 2D ABF data. On each data point one pyramidal B-spline function is centered. Numerically, equation \ref{eq:RMSD} is evaluated on a grid with four control points per dim and dimension.
+      Right: Illustration of B-spline functions used for integration of 2D ABF data. On each data point one pyramidal B-spline function is centered. Numerically, equ.~\ref{eq:RMSD} is evaluated on a grid with four control points per dim and dimension.
     }
 \label{fig:FEM}%
 \end{figure}

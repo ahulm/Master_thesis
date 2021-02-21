@@ -2,52 +2,69 @@
 \label{cha:results}
 \section{Numerical Tests in an 2D Toy Potential}
 \label{sec:2D}
-For numerical tests the dynamics of a single particle in potential $U_2(x,y)$ (eq. \ref{eq:U2}) is simulated under application of different biasing algorithms.
-Including both the $x$ and $y$ direction the full configuration space is used as CV space.
-The analytical PMF and free energy difference is therefore given by
+As a simple test to check all ABM methods a single particle in the two-dimensional potential $U_2$ (eq.~\ref{eq:U2}) is considered.
+By performing a simple 2D to 2D mapping in the absence of any dimensionality reduction, the analytical PMF and free energy difference is given by
 \begin{equation}
   \begin{split}
     A(x,y)&=U_2(x,y) \\
     \Delta A_{A\to B} &= 0
   \end{split}
 \end{equation}
-The convergence of numerical calculations of PMFs to the analytical result with different adaptive biasing schemes (MtD, WTM, ABF, eABF and WTM-eABF) is computed in 5~ns trajectories.
+The convergence of numerical PMFs and free energy differences to the analytical result with different adaptive biasing schemes (MtD, WTM, ABF, eABF and WTM-eABF) is computed over the course of 5~ns trajectories.
 Note that all adaptive biasing methods depend on a different set of parameters.
 Their convergence can therefore only be compared qualitatively.
 A detailed analysis of the impact of the choice of parameters will be given in the following section.
-Parameters applied in this section are given in table~\ref{tab:2D params} of the appendix.
-The conference of the analytical PMF and the development of free energy differences $\Delta A_{A\to B}$ is given in figure~\ref{fig:conv 2D}.
-Figure~\ref{fig:error 2D} shows the absolute errors of the obtained PMFs after 5~ns.
-Additional snapshots of the numerical PMF at 1, 3 and 5~ns are given in the appendix.
+Parameters applied in this section and resulting PMFs after 1, 3 and 5~ns are given in the Appendix.
+In Fig.~\ref{fig:conv 2D} the convergence of the PMF and corresponding estimate for the free energy difference over time is given.
+Fig.~\ref{fig:error 2D} shows remaining absolute local errors at the end of all simulations.
+
+In an unbiased simulation the system stays trapped in one metastable state.
+This is a example of quasi-nonergodic behavior, where simple time averages of MD trajectories do not converge to the correct ensemble average.
+Because only a small region of CV space is explored the free energy difference $\Delta A_{A\to B}$ is highly overestimated.
+
+All adaptive biasing methods reduce the metastability significantly and enable uniform sampling of both states.
+In MtD/WTM simulations the PMF is given by a superposition of Gaussian hills, which are deposited linearly over time and fill both minima consecutively.
+For this particular set of parameters no full convergence is reached in 5~ns.
+Regions with high free energy at the margins remain unexplored due to incomplete filling of the PMF with Gaussians and the obtained PMFs deviate from the analytic result by about 20~\%.
+However, using WTM this is intentional as the fraction of the PMF that is compensated in the simulation is chosen with the effective temperature $\Delta T$.
+The height of Gaussians is reduced over time, which results in significantly smaller fluctuations and absolute errors of the PMF in large parts of the PMF than with MtD.
+After 4~ns the free energy difference $\Delta A_{A\to B}$ obtained from WTM therefore converges safely towards 0~kJ/mol.
 \begin{figure}[H]
    \centering
    \includegraphics[width=0.99\textwidth]{bilder/test_2D/conv}
-   \caption{Convergence of free energy calculations with different adaptive biasing methods for 2D toy potential $U_2(x,y)$. On the right the RMSD between the analytical and numerical PMF is given over the course of 5~ns trajectories. On the right the development of free energy differences $\Delta A_{A\to B}$ between both minima given by eq.~\ref{eq:free energy diff} is shown. The transition barrier between both minima is on the line $0.25x+y$. Therefore $A$ includes all states $x>-4y$ and $B$ all states $x<-4y$, respectively. Details are given in the appendix.}
+   \caption{Convergence of free energy calculations with different adaptive biasing methods for a 2D to 2D mapping of toy potential $U_2$. On the right the RMSD between the analytical and numerical PMF is given over the course of 5~ns trajectories. On the right the development of free energy differences $\Delta A_{A\to B}$ given by eq.~\ref{eq:free energy diff} is shown. Both metastable states are separated by the line $0.25x+y$. Therefore $A$ includes all states $x>-4y$ and $B$ all states $x<-4y$, respectively.}
  \label{fig:conv 2D}%
- \end{figure}
+\end{figure}
 \begin{figure}[H]
   \centering
   \includegraphics[width=0.99\textwidth]{bilder/test_2D/error_5ns}
-  \caption{Heat maps of the absolute difference between the analytic PMF and PMFs computed from 5~ns trajectories at 300~K with different adaptive biasing schemes (Error$=|U_2(x,y)-A_{5ns}(x,y)|$). Details are given in the appendix.}
+  \caption{Heat maps of the absolute difference between the analytic and numerical PMFs. Numerical PMFs are obtained from 5~ns MD trajectories at 300~K.}
 \label{fig:error 2D}%
 \end{figure}
-In an unbiased simulation the system stays trapped in one metastable state.
-This is a prototypical example of quasi-nonergodic behavior, where simple time averages over MD trajectories do not converge to the correct ensemble average.
-Because only one free energy minimum is explored the free energy difference $\Delta A_{A\to B}$ is highly overestimated.
+With ABF after 3~ns the potential is mapped almost perfectly with maximum local errors below 1~kJ/mol. Also the RMSD of the PMF and free energy difference $\Delta A_{A\to B}$ converges rigorously to the analytic results.
+For this particular example ABF force samples are simply given by the gradient of the analytical potential.
+The variance of force samples, which is only introduced by the finite bin width, is therefore small and convergence of the ABF force in individual bins is reached almost instantly.
+Even faster exploration of the PMF is only hindered by the ramp function, which is not strictly necessary for this toy example, but still applied to provide a more realistic test case for real chemical applications.
+PMFs are obtained by thermodynamic integration of ABF forces with the FEM method, as shown in Fig.~\ref{fig:ti}.
+\begin{figure}[H]
+  \centering
+  \includegraphics[width=0.99\textwidth]{bilder/test_2D/ti}
+  \caption{On the left the convergence of the thermodynamic integration of ABF forces with the FEM method in a BFGS minimization is given. On the right the resulting mean local difference of optimized B-splines to the ABF forces is shown.}
+\label{fig:ti}%
+\end{figure}
+Convergence of the FEM method is reached reliably in 100 iterations by minimization of eq.~\ref{eq:RMSD} with the BFGS algorithm.
+At the transition barrier, where the thermodynamic force changes rapidly, this introduces small errors to the PMF, which can be reduced with a smaller bin width and more B-spline functions.
 
-All adaptive biasing methods reduce the metastability significantly and enable uniform sampling of both states.
-In metadynamics simulation the PMF is estimated by a superposition of gaussian hills which are deposited linearly over time.
-This is reflected by the linear convergence of MtD over time, which strongly depends on the applied parameters.
-For this particular set of parameters no complete convergence is not reached after 5~ns.
-Therefore some regions at the margin with high free energy remain unexplored, but also in areas that are already filled with gaussians the obtained PMF is characterized by large fluctuations of up to 5~kJ/mol.
-By scaling down the gaussian height over time WTM reduces this fluctuations significantly and enables rigorous convergence of the resulting PMF.
-This enables rigorous convergence of the free energy difference $\Delta A_{A\to B}$.
-However, large local errors in high free energy regions due to incomplete filling of the PMF with Gaussian hills still result in a similar RMSD to the analytical PMF than obtained with MtD.
+Both eABF and WTM-eABF preserve the rigorous convergence behavior of ABF.
+By estimating the thermodynamic force over the extended-system, the variance of obtained force samples depends on the harmonic force constant of the coupling of the fictitious to the physical particle.
+For this toy example this introduces some noise to the mean force, where it would reduce said noise in real chemical applications.\autocite{lesage2017smoothed}
+The PMF therefore shows small fluctuations of up to 2~kJ/mol for both methods and convergence to the true PMF is reached with a final RMSD of about 2~\%.
+However, quite surprisingly convergence of the mean force with eABF is as fast as with ABF and WTM-eABF gives an additional speed up.
+With WTM-eABF the estimate for the free energy difference stays close to 0~kJ/mol over the course of the hole simulation.
+This indicates that the hole PMF is explored uniformly from the beginning and the system is never trapped in one state.
 
-
-
-
-
+In this section the favorable convergence behavior of ABF, eABF and WTM-eABF was demonstrated.
+In the following sections this methods will be discussed in further detail for a real chemical system with special focus on the influence of input parameters on the simulations.
 
 \newpage
 \section{Benchmark Calculations for the Torsion of Cl-F-Ethane}
