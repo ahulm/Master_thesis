@@ -1,3 +1,6 @@
+# -*- coding: utf-8 -*-
+'''Collective Variables for free energy calculations 
+'''
 import numpy as np
 import sys
 

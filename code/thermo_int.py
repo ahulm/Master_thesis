@@ -1,36 +1,35 @@
+#!/usr/bin/env python
+
+import time
 import numpy as np
 import matplotlib.pyplot as plt
 import scipy.optimize as opt
-from scipy import interpolate 
-import time
 
-H_in_kJmol = 2625.499639  #
-R          = 8.314        # J/(K*mol)
-RT         = R*T/1000.0   # 
-RT_au      = RT/2625.5    # 
-kB         = 1.380648e-23 # J / K
-H_to_J     = 4.359744e-18 #
-kB_a       = kB / H_to_J  # Hartree / K
+H_in_kJmol = 2625.499639  
+kB         = 1.380648e-23      # J / K
+H_to_J     = 4.359744e-18      #
+kB_a       = kB / H_to_J       # Hartree / K
 
-class FEM:
-    '''integration of ABF gradients with the finite element method to get 2D PMFs
-       reads themodynamic forces from outout of ABF calculation 
+class TI:
+    '''thermodynamic integration with the finite element method to get 2D PMFs
+       reads themodynamic forces from outputs of ABM calculations 
  
     args:
-        T               (double, temperature of free energy calculation)
-        inputname	(string, filename of input)
-        outputname	(string, filename for output)
+        T (double): temperature of free energy calculation in K
+        inputfile (string): filename of input
+        outputfile (string): filename of output
     '''
-    def __init__(self, T=300, inputname='abm.out', outputname='free_energy'):
+    def __init__(self, T=300, inputfile='abm.out', outputfile='free_energy'):
         
         out = open("FEM.out", "w")
         out.write("\n#######################################################\n")
-        out.write("\tFEM integration of 2D ABF data\n")
+        out.write("\tFEM integration of thermodynamic forces \n")
         out.write("#######################################################\n\n")
         out.write("Initialize spline functions.\n\n")
-        
-        self.outname = outputname        
-        data = np.loadtxt(inputname, skiprows=1)
+             
+        self.RT      = kB_a*T*H_in_kJmol 
+        data         = np.loadtxt(inputfile, skiprows=1)
+        self.outname = outputfile 
         
         # coordinates of bins
         xi_1 = data[:,0]
@@ -66,8 +65,8 @@ class FEM:
         self.alpha = np.full((int(self.x_bins*self.y_bins),), 0.0, dtype=np.float)
         out.write("%30s:\t%8d\n" % ("Number of coefficients", self.alpha.size))
         
-        # interploate gradient to control points
-        origD = [data[:,3].reshape(self.y_bins, self.x_bins), data[:,4].reshape(self.y_bins, self.x_bins)]
+        # linear interpolation of gradient to control points
+        origD = [data[:,6].reshape(self.y_bins, self.x_bins), data[:,5].reshape(self.y_bins, self.x_bins)]
         D = [np.zeros(shape=(self.leny,self.lenx), dtype=np.float), np.zeros(shape=(self.leny,self.lenx), dtype=np.float)]
         for xy in range(2):
             D[xy][::4, ::4] = origD[xy]
@@ -81,7 +80,7 @@ class FEM:
         self.D = self.D[:,:-1,:-1]
         out.write("%30s:\t%8d\n" % ("Elements in gradient matrix", self.D.size))
         
-        # initialize pyramid functions 
+        # initialize B-spline functions 
         self.B = []
         self.gradB = []
         for center_y in xi_1[:,0]:
@@ -92,6 +91,7 @@ class FEM:
         self.B = np.asarray(self.B)
         self.gradB = np.asarray(self.gradB)
         self.gradB = self.gradB[:,:,:-1,:-1]
+
         out.write("%30s:\t%8d\n" % ("Elements in gradB matrix", self.gradB.size))
         out.close()
 
@@ -225,7 +225,7 @@ class FEM:
 
     #--------------------------------------------------------------------------------------
     def get_F(self):
-        '''
+        '''get free energy from optimized coefficients
         ''' 
         F_surface = np.zeros(shape=(self.leny,self.lenx), dtype=np.float64)
         fitted_grad_x = np.zeros(shape=(self.leny-1,self.lenx-1), dtype=np.float64)
@@ -236,9 +236,9 @@ class FEM:
             fitted_grad_x += a*self.gradB[ii][0]
             fitted_grad_y += a*self.gradB[ii][1]
     
-        prob_surface = np.exp(-F_surface/RT) 
+        prob_surface = np.exp(-F_surface/self.RT) 
         prob_surface /= prob_surface.sum()*self.dx*self.dy
-        F_surface = -RT*np.log(prob_surface)       
+        F_surface = -self.RT*np.log(prob_surface)       
  
         estim_err_x = np.abs(fitted_grad_x - self.D[0]) 
         estim_err_y = np.abs(fitted_grad_y - self.D[1]) 
@@ -252,7 +252,7 @@ class FEM:
         '''
         out = open(f"%s.dat" % (self.outname), "w")
 
-        head = ("Xi1", "Xi1", "error x", "error y", "probability", "free energy [kJ/mol]")
+        head = ("Xi1", "Xi0", "error 1", "error 0", "probability", "free energy [kJ/mol]")
         out.write("%14s\t%14s\t%14s\t%14s\t%14s\t%14s\n" % head)
         for i in range(self.leny-1):
             for j in range(self.lenx-1):

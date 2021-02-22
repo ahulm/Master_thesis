@@ -18,12 +18,12 @@ where $x,y$ are particle coordinates and $a,b,c,d$ are parameters of the potenti
 \label{fig:potentials}%
 \end{figure}
 To simulate the particles dynamics a Velocity Verlet\autocite{swope1982computer} integrator is applied with a time step of 5~fs.
-The initial momenta where randomly chosen from a Maxwell-Boltzmann distribution at 300~K.
+The initial momenta are drawn randomly from a Maxwell-Boltzmann distribution at 300~K.
 Afterwards the temperature is controlled at 300~K by a Langevin thermostat\autocite{kroger2005models} with friction constant 0.001~fs$^{-1}$.
-Crucial for the dynamics of the system is the ratio of thermal energy~$k_B T$ to the barrier height.
+Crucial to the metastability of the system is the ratio of thermal energy~$k_B T$ to the barrier height.
 Here, we always use transition barriers of height 8~$k_B T$ (20~kJ/mol).
 Spontaneous transitions between minima in unbiased simulations can therefore be expected to be rare events.
-All test simulation are completely performed in Python. The employed adaptive biasing code is discussed in section~\ref{sec:comp ABM}
+All test simulation are completely performed in Python.
 
 \section{Molecular Dynamics Simulations}
 \label{sec:comp MD}
@@ -31,11 +31,11 @@ For QM simulations a Python interface for the in-house program suite FermiONs++\
 Propagation of atomic coordinates with the Velocity Verlet\autocite{swope1982computer} integrator and temperature control with the Langevin thermostat\autocite{kroger2005models} (see algorithm~\ref{alg:ABM}) is done in Python.
 For QM energy and gradient evaluation the PyFermiONsInterface was used.
 All systems are simulated in vacuum.
-To generate starting geometries for MD simulations molecular structures were minimized with the FermiONs intern structure optimizer. MD simulations always consist of the following three steps:
+To generate starting structures for MD simulations minimum energy geometries are obtained with the FermiONs intern geometry optimizer. MD simulations always consist of the following three steps:
 \begin{enumerate}
   \item \textit{Heating}: Simulations are heated from 1~K to 300~K in 3000 time steps with a step size of 0.1~fs. Initial momenta are randomly drawn from a Maxwell-Boltzmann distribution. The velocities are rescaled every 10~time steps to increase the temperature by 1~K.
-  \item \textit{Equillibration}: For thermal equilibration of the heated system at 300~K it is simulated for 1.0~ps under application of the Langevin thermostat with a friction coefficient of 0.001~fs$^{-1}$. The time-step is increased to 0.5~fs. To produce starting structures for free energy estimation the system is also confined to the range of interest in CV space with harmonic walls.
-  \item \textit{Production}: For production runs the equilibrated system is simulated under additional application of some enhanced sampling algorithms (see section~\ref{sec:comp ABM}).
+  \item \textit{Equillibration}: For thermal equilibration of the heated system is simulated for 1.0~ps under application of the Langevin thermostat at 300~K with a friction coefficient of 0.001~fs$^{-1}$. The time-step is increased to 0.5~fs. To produce starting structures for free energy estimation the system is also confined to the range of interest in CV space with harmonic walls.
+  \item \textit{Production}: For production runs the equilibrated system is simulated under additional application of some enhanced sampling algorithm (see section~\ref{sec:comp ABM}).
 \end{enumerate}
 
 \section{Adaptive Biasing Implementation}

@@ -258,22 +258,22 @@ is used to approximate the PMF.
 \begin{equation}
   A(\xi) = \sum_l \alpha_l B_l(\xi). \label{eq:FEM}
 \end{equation}
-Coefficients $\alpha_l$ are obtained by minimizing the root mean square deviation between force estimates and gradients of spline functions
+Coefficients $\alpha_l$ are obtained by minimizing the quadratic deviation between force estimates and gradients of spline functions
+%\begin{equation}
+%  RMSD(\vec{\alpha})=\sqrt{\frac{1}{M}\sum_i^M\biggl(\bigl(\sum_l \alpha_l \nabla B_l(\xi_i)\bigr) - \braket{F(\xi_i)} \biggr)^2}
+%  \label{eq:RMSD}
+%\end{equation}
 \begin{equation}
-  RMSD(\vec{\alpha})=\sqrt{\frac{1}{M}\sum_i^M\biggl(\bigl(\sum_l \alpha_l \nabla B_l(\xi_i)\bigr) - \braket{F(\xi_i)} \biggr)^2}
+\text{Error}(\vec{\alpha})=\sum_i^M\biggl|\sum_l \alpha_l \nabla B_l(\xi_i) - \braket{F(\xi_i)} \biggr|^2
   \label{eq:RMSD}
 \end{equation}
-\begin{equation}
-\text{Error}=\sum_i^M\biggl|\bigl(\sum_l \alpha_l \nabla B_l(\xi_i)\bigr) - \braket{F(\xi_i)} \biggr|^2
-  \label{eq:power}
-\end{equation}
-with some numerical minimization routine (e.g., BFGS algorithm\autocite{nocedal2006numerical}) for force estimates of all dimensions.\autocite{darve2008adaptive} To increase the smoothness of the reconstructed free energy surface in practice, four control points per bin and dimension are chosen between data points. Force estimates for the control points are obtained by linear interpolation between original data points. Figure~\ref{fig:FEM} shows illustrative examples for the application of B-spline functions in the FEM method.
+with the BFGS algorithm\autocite{nocedal2006numerical} for force estimates of all dimensions.\autocite{darve2008adaptive} To increase the smoothness of the reconstructed free energy surface in practice, four control points per bin and dimension are chosen between data points. Force estimates for the control points are obtained by linear interpolation between original data points. Figure~\ref{fig:FEM} shows illustrative examples for the application of B-spline functions in the FEM method.
 \begin{figure}[H]
     \centering
     \includegraphics[width=1\textwidth]{bilder/FEM}
     \caption{
       On the left an example for the approximation of an 1D PMF by triangular B-spline functions is shown.
-      Right: Illustration of B-spline functions used for integration of 2D ABF data. On each data point one pyramidal B-spline function is centered. Numerically, equ.~\ref{eq:RMSD} is evaluated on a grid with four control points per dim and dimension.
+      Right: Illustration of B-spline functions used for integration of 2D ABF data. On each data point one pyramidal B-spline function is centered. Numerically, equation~\ref{eq:RMSD} is evaluated on a grid with four control points per dim and dimension.
     }
 \label{fig:FEM}%
 \end{figure}

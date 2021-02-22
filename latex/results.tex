@@ -49,7 +49,7 @@ PMFs are obtained by thermodynamic integration of ABF forces with the FEM method
 \begin{figure}[H]
   \centering
   \includegraphics[width=0.99\textwidth]{bilder/test_2D/ti}
-  \caption{On the left the convergence of the thermodynamic integration of ABF forces with the FEM method in a BFGS minimization is given. On the right the resulting mean local difference of optimized B-splines to the ABF forces is shown.}
+  \caption{On the left the convergence of the thermodynamic integration of ABF forces with the FEM method in a BFGS minimization is given for different time steps. On the right the mean local difference of optimized B-splines to the mean forces is shown.}
 \label{fig:ti}%
 \end{figure}
 Convergence of the FEM method is reached reliably in 100 iterations by minimization of eq.~\ref{eq:RMSD} with the BFGS algorithm.
@@ -72,63 +72,63 @@ In the following sections this methods will be discussed in further detail for a
 The following section will give a detailed discussion on the effect of different parameters on the time convergence of adaptive biasing force methods (ABF, eABF and WTM-eABF).
 As test system the transition of the dihedral angle between the Cl- and F-group in Cl-F-Ethane from the gauge$^+$ ($60^\circ$) to the gauge$^-$ ($-60^\circ$) structure on the PBEh-3c/dev2-msvp level of theory in vacuum will be considered.
 
-Figure~\ref{fig:ABF benchmark} shows the PMF obtained from a ABF calculation for growing values of $N_{full}$ from 50~ps long trajectories.
-Convergence rates will be calculated in reference to the ABF ($N_{full}=100$) result after 50~ps.
-After roughly 30~ps all three simulations converge to the same result.
-For higher values of $N_{full}$ it takes longer to fill the ramp functions.
-Diffusion to other minima along the reaction coordinate and its uniform sampling is therefore delayed and convergence slowed down.
-In this particular example, even the unrestrained application of the ABF force from the start ($N_{full}=1$) does not lead to any non-equilibrium effects.
-However, as instantaneous force samples depend on all molecular coordinates, the variance of fluctuations in ABF estimates can be expected to grow with the system size.
-More specifically fluctuations of the ABF force will be dominated by high frequency terms due to bonded interactions\autocite{lesage2017smoothed}, which also leads to a dependence of the variance in ABF force samples at the beginning of the simulation on the amount of equillibration.\autocite{blondel2004ensemble}
-Using smaller values of $N_{full}$ is therefore associated with a certain risk to drive the system away from thermal equilibrium at the beginning of the simulation.
-Correcting wrong force estimates obtained with high statistical weight at the beginning of the simulation takes exceedingly long which makes corresponding free energy estimates prone to errors.\autocite{comer2015adaptive}
-Overall $N_{full}=100$ is found to result in a good compromise between save and fast convergence of the ABF force estimates for all systems considered in this work.
+Figure~\ref{fig:ABF benchmark} shows PMFs obtained from ABF calculations with different values of $N_{full}$ in 50~ps trajectories and the time convergence of free energy differences and RMSD of the PMF in reference to the final ABF ($N_{full}=100$) result.
+After roughly 30~ps all three PMFs converge to the same result within 1.0~\% deviation.
+For high values of $N_{full}$ it takes longer to fill the ramp functions.
+This delays diffusion to the second minimum and uniform sampling of the reaction coordinate.
+Small values of $N_{full}$ are associated with a certain risk to drive the system away from thermal equilibrium at the beginning of the simulation.
+As instantaneous force samples depend on all molecular coordinates, the variance of fluctuations in estimates of the mean force grows with the system size.
+More specifically this fluctuations are dominated by high frequency terms due to bonded interactions\autocite{lesage2017smoothed}, which also leads to a dependence of the variance in ABF force samples on the amount of equillibration prior to the simulation.\autocite{blondel2004ensemble}
+In this example the result are large fluctuations of $\Delta A$ over the course of the simulation.
+Overall $N_{full}=100$ is found to result in a good compromise between fast and stable convergence of the PMF and free energy difference.
 \begin{figure}[H]
     \centering
     \includegraphics[width=0.99\textwidth]{bilder/benchmark/ABF_benchmark_nfull}
     \caption{ABF benchmark}
     \label{fig:ABF benchmark}
 \end{figure}
-For eABF the ramp function is applied in the exact same way and with the same consequences than for ABF.\autocite{lesage2017smoothed}
-However, mean square fluctuations $\sigma_F$ of the eABF force only depend on the spring force between the CV and the extended variable and is therefore proportional to the harmonic force constant $k_\lambda$.
+In eABF calculations mean square fluctuations $\sigma_F$ of force samples only depend on the spring force between the CV and extended variable and are inversely proportional to the thermal width $\sigma_\lambda$.
 \begin{equation}
     \sigma_F^2 \propto \frac{k_\lambda}{\beta} = \frac{1}{\beta\sigma_\lambda}
 \end{equation}
-This implies that in eABF calculations higher the variance of
+The choice of $\sigma_\lambda$ is therefore a trade-off between enhanced sampling of the CV by tight coupling to $\lambda$ and reduced fluctuations of the extended force.\autocite{lesage2017smoothed}
+Figure~\ref{fig:conf eABF} shows both limiting cases.
+With a small thermal width of $1^\circ$ convergence is hindered by high fluctuations of the mean force.
+On the other hand for loose coupling to the fictitious particle ($N_{full}=20^\circ$) $\lambda$ is sampled uniformly, but the physical CV stays trapped in one metastable state.
+The mass of the extended variable has much less influence on the resulting PMF.
+If the mass of the fictitious particle is much smaller than that of the CV, it is more difficult to pull the CV over the TS and convergence is slowed down.
+However, no consistent influence of $m_\lambda$ on the obtained PMF is observed.
+Relatively large scattering in the estimates of $\Delta A$ from $-2$~kJ/mol to $2$~kJ/mol indicate that no full convergence is reached 50~ps.
+To calculate $\Delta A$ the probability of finding the system in the gauge$^-$ or gauge$^+$ state is obtained by integrating the corresponding probability densities, which are separated at the maximum of the PMF.
+Therefore, small fluctuations of the PMF at the TS can lead to large shifts of $\Delta A$, because the maximum of the PMF switches to different bins.
 \begin{figure}[H]
   \centering
     \includegraphics[width=0.99\textwidth]{bilder/benchmark/eABF_benchmark_sigma}
-   \caption{Convergence of eABF with $m_\lambda=15$~a.u. and $N_{full}=100$.}
-   \label{fig:conf eABF sigma}
-\end{figure}
-
-\begin{figure}[H]
-  \centering
     \includegraphics[width=0.99\textwidth]{bilder/benchmark/eABF_benchmark_mass}
-   \caption{Convergence of eABF with $\sigma_\lambda=5$ degree and $N_{full}=100$.}
-   \label{fig:conf eABF mass}
+   \caption{Convergence of eABF/CZAR with $m_\lambda=15$~a.u. and $N_{full}=100$.}
+   \label{fig:conf eABF}
 \end{figure}
-
+Figure~\ref{fig:traj ABF} shows trajectories of simulations with ABF, eABF and WTM-eABF.
+In WTM-eABF the number of transitions between both states is double as high is in a eABF normal ABF simulation with the same parameters of the extended-system.
+This enables not only consistently faster convergence of the PMF, but also a more accurate result at the important TS region, as shown in Figure~\ref{fig:conf meABF}.
+The fluctuations in the estimate of $\Delta A$ are therefore much smaller.
+The WTM potential only enhances sampling by pushing the system to high free energy regions.
+It has no significant impact on the resulting PMF, which is obtained from CZAR, as long the canonical ensemble is sampled.
+WTM-eABF is therefore vary robust to the choice of WTM parameters like the Gaussian height $W$ and variance $\sigma_G$.
+The influence of the eABF $m_\lamba$ and $\N_{full}$ is also even less severe, as both only impact enahanced sampling as well, which is always improved by the repulsive WTM potential.
 \begin{figure}[H]
   \centering
     \includegraphics[width=0.99\textwidth]{bilder/benchmark/meta_eABF_benchmark_height}
-   \caption{Convergence of WTM-eABF with $m_\lambda=5$~a.u., $\sigma_\lambda=5$, $\sigma_G=5$, $\tau_G=10$~fs, $\Delta T=2000$~K and $N_{full}=100$.}
-   \label{fig:conf meABF height}
-\end{figure}
-
-\begin{figure}[H]
-  \centering
     \includegraphics[width=0.99\textwidth]{bilder/benchmark/meta_eABF_benchmark_var}
-   \caption{Convergence of WTM-eABF with $m_\lambda=5$~a.u., $\sigma_\lambda=5$, $W=5$ kJ/mol, $\tau_G=10$~fs, $\Delta T=2000$~K and $N_{full}=100$.}
-   \label{fig:conf meABF var}
+   \caption{Convergence of WTM-eABF with $m_\lambda=5$~a.u., $\sigma_\lambda=5$, $\sigma_G=5$, $\tau_G=10$~fs, $\Delta T=2000$~K and $N_{full}=100$.}
+   \label{fig:conf meABF}
 \end{figure}
-
-% \begin{figure}[H]
-%     \centering
-%     \includegraphics[width=0.99\textwidth]{bilder/benchmark/ABF_trajs}
-%     \caption{Trajectories during ABF, eABF and WTM-eABF simulation.}
-%     \label{fig:traj ABF}
-% \end{figure}
+\begin{figure}[H]
+     \centering
+     \includegraphics[width=0.99\textwidth]{bilder/benchmark/ABF_trajs}
+     \caption{Trajectories during ABF, eABF and WTM-eABF simulation.}
+     \label{fig:traj ABF}
+\end{figure}
 
 \begin{figure}[H]
   \centering
