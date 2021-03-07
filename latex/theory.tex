@@ -3,15 +3,14 @@
 
 \section{Statistical Thermodynamics and Free Energy}
 \label{sec:freeE}
-
-In the following, a brief introduction to the broad field of free energy calculation\autocite{chipot2007free} and more specific to the idea of \textit{enhanced sampling}\autocite{bernardi2015enhanced,abrams2014enhanced} is given.
+In the following, a brief theoretical introduction to the broad field of free energy calculation\autocite{chipot2007free} and more specific to the idea of \textit{enhanced sampling}\autocite{bernardi2015enhanced,abrams2014enhanced} is given.
 Considering a system of atoms with coordinates $\textbf{x}^T=(x_1,...,x_{3N})$ and momenta $\textbf{p}^T=(p_1,...,p_{3N})$, the total energy is given by the Hamiltonian
 \begin{equation}
   H(\textbf{x},\textbf{p})=\sum_{i=1}^{3N}\frac{p_{i}^{ 2}}{2 M_i} + U(\textbf{x}),
   \label{eq:lagrangian}
 \end{equation}
 where $M$ denotes the mass of atomic nuclei, which are treated classically, and $U(\textbf{x})$ is the Born-Oppenheimer potential energy surface (PES).\autocite{combes1981born}
-In practice the PES can ether be obtained from molecular mechanics (MM) using some force field\autocite{ponder2003force} or from a quantum mechanical electronic structure theory (QM), most commonly density functional theory (DFT).\autocite{burke2012perspective}
+In practice the PES can ether be obtained from molecular mechanics (MM) using force fields\autocite{ponder2003force} or from a quantum mechanical electronic structure theory (QM), most commonly density functional theory (DFT).\autocite{burke2012perspective}
 If the system is in thermal equilibrium the probability density $\rho(\textbf{x})$ in configuration space $\textbf{x}$ at temperature $T$ is given by the Boltzmann distribution
 \begin{equation}
   \rho(\textbf{x})=\frac{e^{-\beta U(\textbf{x})}}{\int e^{-\beta U(\textbf{x})} d\textbf{x}}=Z^{-1}e^{-\beta U(\textbf{x})}
@@ -23,7 +22,7 @@ In this thesis the focus is on chemical reactions, $A \longrightarrow B$, which 
  \xi(\textbf{x}) : \mathbb{R} ^{3N} \to \mathbb{R}
 \end{equation}
 that are sufficient to distinguish between key states of interest.
-Typical CVs are for example atomic distances, bend angles, or dihedrals (details are given in the Appendix).\autocite{fiorin2013using}
+Typical CVs are for example atomic distances, bend angles, or dihedrals.\autocite{fiorin2013using}
 %Because of the rapid growing computational effort for sampling of multidimensional coordinates we will only consider 1 or 2 dimensional CVs in the following.
 The marginal probability distribution of these CVs is defined by
 \begin{equation}
@@ -32,7 +31,7 @@ The marginal probability distribution of these CVs is defined by
 \end{equation}
 where $\braket{}_z$ denotes the $z$-conditioned marginal distribution.\autocite{chipot2007free}
 In practice the low (in the following maximal two) dimensional probability density $\rho(z)$ is expressed by a histogram with fixed bin size $\delta z$.
-The potential of mean force (PMF) $A(z)$, i.e., potential of the canonical (N,V,T)-ensemble, is defined as
+The potential of mean force (PMF) $A(z)$, i.e., free energy curve, is defined as
 \begin{equation}
   A(z) = -\beta^{-1}\ln \rho(z)
   \label{eq:free energy}
@@ -44,9 +43,8 @@ This is, however, not problematic for the calculation of free energy differences
   \Delta A_{A\rightarrow B} = -\beta^{-1}\ln \frac{\int_B \rho(z)dz}{\int_A \rho(z)dz}=-\beta^{-1}\ln \frac{p_B}{p_A}
   \label{eq:free energy diff}
 \end{equation}
-However, it is impossible to directly calculate the direct configuration-space integrals used in equation \ref{eq:boltzmann} and \ref{eq:rho}.\autocite{chipot2007free}
-Most developments in the area of free energy estimation therefore rely on the concept of \textit{ergodicity}\autocite{schutte2013metastability}, which states that each point in phase space converges to a unique limiting value for $t\rightarrow\infty$, such that the time average is equal to the ensemble average\autocite{barducci2011metadynamics}
-
+Because it is impossible to directly calculate the direct configuration-space integrals used in equation \ref{eq:boltzmann} and \ref{eq:rho},\autocite{chipot2007free}
+most developments in the area of free energy estimation rely on the concept of \textit{ergodicity}\autocite{schutte2013metastability}, which states that each point in phase space converges to a unique limiting value for $t\rightarrow\infty$, such that the time average is equal to the ensemble average\autocite{barducci2011metadynamics}
 \begin{equation}
    \lim_{t\to\infty}\frac{1}{t} \int_0^t \rho(z(t')) dt' = \braket{\delta [\xi(\textbf{x})-z]}_z
   \label{eq:ergodic}
@@ -91,23 +89,37 @@ Inserting into equation \ref{eq:free energy} gives the unbiased PMF
 \end{equation}
 The last term of equation (\ref{eq:A US}) is the free energy difference between the unbiased and biased system.
 Since it is only an additive constant it does not change relative free energies computed from one window.\autocite{kumar1992weighted}
-However, to enhance sampling of CV space typically multiple windows, each individually covering only a small section of the reaction coordinate, are sampled. In this case the global unbiased distribution of all combined windows can be obtained from the \textit{Weighted Histogram Analysis Method} (WHAM).\autocite{souaille2001extension} The goal of WHAM is to choose the weights $p_i(z)$ in order to minimize the statistical error of the global unbiased probability density of $S$ combined simulations
+However, to enhance sampling of CV space typically multiple windows, each individually covering only a small section of the reaction coordinate, are sampled. In this case the global unbiased distribution of all combined windows can be obtained from the \textit{Weighted Histogram Analysis Method} (WHAM)\autocite{souaille2001extension} or \textit{Multistate Bennett's Acceptance Ratio} (MBAR)\autocite{shirts2008statistically}, which is also referred to as binless WHAM.
+For this purpose the free energy $A_i$ of one window is implicitly defined as function of all simulated frames and free energies
 \begin{equation}
-  P(z)=\sum_i^{S} p_i(z) P_i^0(z)
+   e^{-\beta A_i} = \sum_j^S \sum_k^{n_j} \frac{e^{-\beta U_i(j,k)}}{\sum_l^S n_l e^{\beta A_l - \beta U_l(j,k)}}
 \end{equation}
-under the constraint $\sum p_i = 1$. This is achieved by the iterative solution of the self-consistent WHAM equations
+with number of simulations $S$, number of frames per simulation $n_j$ and potential energy functions $U_i(j,k)$ of window $i$.
+The MBAR equation can be solved self-consistently or
+alternatively be recast to a minimization problem.
 \begin{equation}
-  p_i(z) = \frac{N_i \e^{-\beta_i U_i^B(z)+\beta_i F_i}}{\sum_j^S N_j \e^{-\beta_j U_j^B(z)+\beta_j F_j}} \label{eq:WHAM 1}
+  g_i = n_i - \sum_j^S \sum_k^{n_j}  \frac{n_i e^{\beta A_i - \beta U_i(j,k)}}{\sum_l^S n_l e^{\beta A_l - \beta U_l(j,k)}} \label{eq:g}
 \end{equation}
+The unbiased free energy curve of $\xi$ is than recovered by
 \begin{equation}
-  \e^{-\beta_i F_i} = \int P(z)\e^{-\beta_i U_i^B (z)}dz
-  \label{eq:WHAM 2}
+  A(\xi) = -\beta^{-1} \ln \sum_j^S \sum_k^{n_j} \frac{\delta(\xi(j,k)-\xi)}{\sum_l^S n_l e^{\beta A_l - \beta U_l(j,k)}}
 \end{equation}
-where $F_i$ enters equation (\ref{eq:WHAM 1}) and $P$ enters equation (\ref{eq:WHAM 2}).\autocite{kastner2011umbrella,souaille2001extension} $N_i$ is the number of samples collected in window i.
-The biggest advantage of this approach is that all windows can be simulated in parallel and only have to be combined once to solve the WHAM equations. In this way, extensive sampling of the reaction coordinate can be obtained efficiently.
+% The goal of WHAM is to choose the weights $p_i(z)$ in order to minimize the statistical error of the global unbiased probability density of $S$ combined simulations
+% \begin{equation}
+%   P(z)=\sum_i^{S} p_i(z) P_i^0(z)
+% \end{equation}
+% under the constraint $\sum p_i = 1$. This is achieved by the iterative solution of the self-consistent WHAM equations
+% \begin{equation}
+%   p_i(z) = \frac{N_i \e^{-\beta_i U_i^B(z)+\beta_i F_i}}{\sum_j^S N_j \e^{-\beta_j U_j^B(z)+\beta_j F_j}} \label{eq:WHAM 1}
+% \end{equation}
+% \begin{equation}
+%   \e^{-\beta_i F_i} = \int P(z)\e^{-\beta_i U_i^B (z)}dz
+%   \label{eq:WHAM 2}
+% \end{equation}
+% where $F_i$ enters equation (\ref{eq:WHAM 1}) and $P$ enters equation (\ref{eq:WHAM 2}).\autocite{kastner2011umbrella,souaille2001extension} $N_i$ is the number of samples collected in window i.
+The biggest advantage of this approach is that all windows can be simulated in parallel and only have to be combined once to solve the MBAR equation. In this way, extensive sampling of the reaction coordinate can be obtained efficiently.
 However, the biasing potentials have to be chosen manually for each window, requiring some knowledge of the free energy surfaces prior to the simulation.
-Additionally, the requirement of overlap between windows often adds up to 50\% of the total simulation time.\autocite{comer2015adaptive}
-In the next section we will look at different approaches to eliminate both drawbacks by replacing equation \ref{eq:US bias} with time dependent terms, which evolve during the simulation to achieve uniform sampling of the reaction coordinate in a single simulation.
+In the next section we will look at different adaptive approaches that replace equation \ref{eq:US bias} with time dependent terms, which evolve during the simulation to achieve uniform sampling of the reaction coordinate in a single simulation.
 
 \newpage
 \section{Adaptive Biasing Methods}
@@ -162,7 +174,7 @@ In principle adaptive biasing methods only rely on sampling of the canonical ens
 \end{algorithm}
 
 \newpage
-\subsection{(Well-Tempered) Metadynamics (MtD/WTM)}
+\subsection{(Well-Tempered) Metadynamics}
 \label{sec:metaD}
 MtD biases a systems dynamic towards undersampled regions along the reaction coordinate $\xi(\textbf{x})$, by accumulating repulsive potentials in regions that have already been visited.\autocite{barducci2011metadynamics} The bias potential is typically build by a superposition of Gaussian hills and can be written
 \begin{equation}
@@ -207,12 +219,12 @@ The next section will look into ABF, which is less dependent on free parameters 
     \centering
     \subfloat[Metadynamics]{{\includegraphics[width=0.49\textwidth]{bilder/metaD_eff_pot} }}
     \subfloat[Well-Tempered Metadynamics]{{\includegraphics[width=0.49\textwidth]{bilder/WTM_eff_pot} }}
-    \caption{Numerical example of the metaD and WTM algorithm for a particle in a 2D double well potential. The reaction coordinate $\xi$ is the x-direction. Over time the bias potentials $U^{MtD}$ and $U^{WTM}$ build up and reduce the free energy barrier. $U^{MtD}$ will ultimately completely remove the free energy barrier, whereas $U^{WTM}$ converges to a certain limit, which can be controlled with parameter $\Delta T$. Details are given in the Appendix.}
+    \caption{Numerical example enhanced sampling with the MtD and WTM algorithm for a particle in a 2D double well potential. The reaction coordinate $\xi$ is the x-direction. Over time the bias potentials $U^{MtD}$ and $U^{WTM}$ build up and reduce the free energy barrier. $U^{MtD}$ will ultimately completely remove the free energy barrier, whereas $U^{WTM}$ converges to a certain limit, which can be controlled with parameter $\Delta T$. }
 \label{fig:metaD}%
 \end{figure}
 
 \newpage
-\subsection{Adaptive Biasing Force Method (ABF)}
+\subsection{Adaptive Biasing Force Method}
 \label{sec:ABF}
 
 The intuition behind ABF is, that if one would know the derivative of the PMF, adding a force $\frac{\partial A(\textbf{x})}{\partial \xi}\nabla\xi(\textbf{x})$ would exactly compensate the average of the original force $-\nabla U(\textbf{x})$ along a given coordinate and result in uniform sampling along this coordinate.\autocite{comer2015adaptive}
@@ -241,7 +253,7 @@ Figure~\ref{fig:ABF} shows a numerical example for the flattening of the reactio
     \centering
     \subfloat[ABF force $\overline{F}$]{{\includegraphics[width=0.49\textwidth]{bilder/ABF_force} }}
     \subfloat[effective potential ($A(\xi)-\int\overline{F}(\xi)d\xi$)]{{\includegraphics[width=0.49\textwidth]{bilder/ABF_freeE} }}
-    \caption{Numerical example of ABF algorithm for a 2D double well potential. The reaction coordinate $\xi$ is the x-direction. $\overline{F}(\xi)$ completely compensates the free energy barrier after 15~ps. From there on, the systems evolution resembles Brownian motion along the flattened reaction coordinate, which will ultimately lead to uniform sampling. Details are given in the Appendix.}
+    \caption{Numerical example enhanced-sampling with the ABF algorithm for a 2D double well potential. The reaction coordinate $\xi$ is the x-direction. $\overline{F}(\xi)$ completely compensates the free energy barrier after 15~ps. From there on, the systems evolution resembles Brownian motion along the flattened reaction coordinate, which will ultimately lead to uniform sampling. }
 \label{fig:ABF}%
 \end{figure}
 
@@ -267,7 +279,7 @@ Coefficients $\alpha_l$ are obtained by minimizing the quadratic deviation betwe
 \text{Error}(\vec{\alpha})=\sum_i^M\biggl|\sum_l \alpha_l \nabla B_l(\xi_i) - \braket{F(\xi_i)} \biggr|^2
   \label{eq:RMSD}
 \end{equation}
-with the BFGS algorithm\autocite{nocedal2006numerical} for force estimates of all dimensions.\autocite{darve2008adaptive} To increase the smoothness of the reconstructed free energy surface in practice, four control points per bin and dimension are chosen between data points. Force estimates for the control points are obtained by linear interpolation between original data points. Figure~\ref{fig:FEM} shows illustrative examples for the application of B-spline functions in the FEM method.
+with the BFGS algorithm\autocite{nocedal2006numerical} for force estimates of M dimensions.\autocite{darve2008adaptive} To increase the smoothness of the reconstructed free energy surface, in practice four control points per bin and dimension are chosen between data points. Force estimates for the control points are obtained by linear interpolation between original data points. Figure~\ref{fig:FEM} illustrates the application of the FEM method.
 \begin{figure}[H]
     \centering
     \includegraphics[width=1\textwidth]{bilder/FEM}
@@ -281,7 +293,7 @@ The last missing ingredient for the ABF method is an explicit expression for the
 \begin{equation}
   F(\xi,\textbf{q}) = -\frac{\partial U(\xi,\textbf{q})}{\partial \xi} + \beta^{-1} \frac{\partial \ln|J(\xi,\textbf{q})|}{\partial\xi} \label{eq:instforce old}
 \end{equation}
-which depends implicitly on a vector field $\partial \textbf{x} / \partial \xi$, hereafter referred to as "inverse gradient" and on a Jacobian correction term purely geometric in origin. The inverse gradient can be thought of as the direction along which an infinitesimal change in $\xi$ is propagated in cartesian coordinates keeping complementary coordinates $\textbf{q}$ constant. A major drawback of this formalism is the requirement of a full coordinate transform from cartesian coordinates ($\textbf{x}$) to generalized coordinates ($\xi$, $\textbf{q}$).
+which depends implicitly on a vector field $\partial \textbf{x} / \partial \xi$, hereafter referred to as "inverse gradient", and on a Jacobian correction term purely geometric in origin. The inverse gradient can be thought of as the direction along which an infinitesimal change in $\xi$ is propagated in cartesian coordinates keeping complementary coordinates $\textbf{q}$ constant. A major drawback of this formalism is the requirement of a full coordinate transform from cartesian coordinates ($\textbf{x}$) to generalized coordinates ($\xi$, $\textbf{q}$).
 
 This requirement was lifted in work by den Otter\autocite{den2000thermodynamic}, who put forward the idea that the change in $\xi$ can be propagated along an arbitrary vector field $\textbf{v}_i$ ($\mathbb{R}^{3N} \to \mathbb{R}^{3N}$), provided it satisfies some orthonormality conditions.
 Extended to multidimensional reaction coordinates \textbf{$\xi$} = ($\xi_i$) and in presence of a set of holonomic constraints $\sigma_{k}(\textbf{x})=0$, these read:\autocite{ciccotti2005blue}
@@ -307,15 +319,15 @@ Replacing the inverse gradient by vectorfield $\textbf{v}_i$, expression \ref{eq
 but still involves the calculation of second derivatives in the form of the divergence of vector fields $\textbf{v}_i$.\autocite{comer2015adaptive} Analytic expressions for distances, projected distances, bond angles, and torsion angles, used in the present work, are given in the appendix. However, for complicated CV's like torsion angles, orthogonalization via equation \ref{eq:ortho v} becomes exceedingly tedious and impractical, significantly limiting the applicability of ABF.
 
 \newpage
-\subsection{Extended Lagrangian Based Methods (eABF, meta-eABF, WTM-eABF)}
+\subsection{Extended Lagrangian Based Methods}
 \label{sec:eABF}
 To circumvent the technical requirements of ABF, Lesage et al.\autocite{lesage2017smoothed} proposed a more flexible approach termed extended-system ABF (eABF), where additional coordinates $\lambda_i$ with mass $m_{i}$, which are coupled to reaction coordinates $\xi_i$ with harmonic potentials, are introduced. The extended system ($\textbf{x}$, $\lambda$) evolves according to Langevin dynamics in the potential
 \begin{equation}
   U_{ext}(\textbf{x},\lambda) = U(\textbf{x}) + \sum_i^n \frac{(\xi_{i}(\textbf{x})-\lambda_i)^2}{2\sigma_i^2}.
 \end{equation}
 where the mass $m_i$ of the fictitious particle $i$ and the thermal width between the extended coordinate and physical coordinate $\sigma_i^2=(\beta k_i)^{-1}$ are free parameters.
-The key intuition behind eABF is, that in the tight coupling (low $\sigma_i$, high $k_i$) limit, efficient sampling of $\lambda$ will result in efficient sampling of $\xi$.
-Therefore, to obtain uniform sampling along $\xi$, it is sufficient to bias the dynamics of $\lambda$. The inverse gradient $\textbf{v}_i$ is chosen as zero for all physical coordinates $\textbf{x}$ and 1 for $\lambda_i$.
+The key intuition behind eABF is, that in the tight coupling (low $\sigma_i$, high $k_i$) limit, efficient sampling of $\lambda_i$ will result in efficient sampling of $\xi_i$.
+Therefore, to obtain uniform sampling along $\xi_i$, it is sufficient to bias the dynamics of $\lambda_i$. The inverse gradient $\textbf{v}_i$ is chosen as zero for all physical coordinates $\textbf{x}$ and 1 for $\lambda_i$.
 In this way constraints \ref{eq:cond1} and \ref{eq:cond2} are always satisfied, which is especially useful for calculations involving a set of non-orthogonal reaction coordinates.
 In practice, the Langevin integrator for the extended system is implemented separately from the physical MD engine and can be coupled to any collective variable of interest without additional effort.
 
@@ -324,7 +336,7 @@ Sampling the unbiased extended system in thermal equilibrium gives the following
   P_\lambda(\lambda) \propto \int \e^{-\beta U_{ext}(\textbf{x},\lambda)} d\textbf{x} \\
 \end{equation}
 To enhance sampling of the CV the dynamic of $\lambda$ is biased with the ABF algorithm.
-The mean force acting on $\lambda$ in bin $k$ is simply given by averaging the harmonic force:
+The mean force acting on $\lambda$ in bin $k$ is simply given by averaging the harmonic coupling force:
 \begin{equation}
   \overline{F}(\lambda_{i}, N^k) = \frac{\partial A^{k}(\lambda_{i})}{\partial \lambda_i} = \frac{1}{N^{k}\sigma_i^2} \sum_{\mu=1}^{N^{k}} (\lambda_{i,\mu}^{k}-\xi_{i,\mu}^{k})
   \label{eq:eABF bias}
@@ -332,7 +344,7 @@ The mean force acting on $\lambda$ in bin $k$ is simply given by averaging the h
 At the beginning of the simulation again the linear ramp function $R(N^k)$ given by equation \ref{eq:ramp} is used.
 Note that the force estimate no longer depends on all atomic coordinates $\textbf{x}$ like in normal ABF (cf. equation \ref{eq:inst ABF force}), but only on ($\lambda_i - \xi_i$).
 This has the advantageous side effect, that the noise in $\overline{F}$ can be reduced significantly and faster convergence of $\overline{F}$ can be expected, if $\sigma^2$ is well chosen.\autocite{lesage2017smoothed} Specifically, the mean square fluctuation of the spring force is proportional to $(\beta\sigma)^{-1}$, which shows that the variance of $\overline{F}$ is smaller for higher values of $\sigma$.
-Over time the biased probability density in $\lambda$ $P^B(\lambda_i)$ given by
+Over time the biased probability density in $P^B(\lambda_i)$ given by
 \begin{equation}
   \begin{split}
   P^B(\lambda_i) &\propto \int \e^{-\beta U_{ext}(\textbf{x},\lambda_i) +\int \overline{F}(\lambda_{i})d\lambda} d\textbf{x} \\
@@ -344,15 +356,15 @@ We now need to find a robust estimator to recover the PMF of the original physic
 The naive approach is to approximate $A(\xi_i)$ with $A^\lambda(\lambda_i)$, which is obtained by simply integrating the bias force $\overline{F}(\lambda_{i})$ like in normal ABF.
 However, this will only produce unbiased results in the tight coupling limit for $\sigma \rightarrow 0$, where standard ABF is recovered.
 
-An asymptotically unbiased estimator of $A(\xi_i)$ can be derived by correcting the free energy gradient obtained from the eABF-biased distribution $\tilde{p}(\xi)$ with the average biasing force on $\xi$
+An asymptotically unbiased estimator of $A(\xi_i)$ can be derived by correcting the free energy gradient obtained from the eABF-biased distribution $P^B(\xi_i)$ with the average biasing force on $\xi_i$
 \begin{equation}
   \begin{split}
 \frac{\partial A(\xi_i)}{\partial \xi_i} &= -\beta^{-1}\frac{\partial \ln P^B(\xi_i)}{\partial \xi_i} + k(\braket{\lambda_i}_{\xi_i}-\xi_{i}) \\
-  &= -\beta^{-1}\frac{\partial \ln \tilde{p}(\xi_i)}{\partial \xi_i} + \overline{F}_{corr}
+  &= -\beta^{-1}\frac{\partial \ln P^B(\xi_i)}{\partial \xi_i} + \overline{F}_{corr}(\xi_i)
 \end{split}
   \label{eq:CZAR}
 \end{equation}
-which is called \textit{Corrected z-averaged restraint} (CZAR)\autocite{lesage2017smoothed} and can be calculated on-the-fly during the simulation at little extra cost by introducing two additional accumulators for $\tilde{p}(z)$ and $k(\braket{\lambda_i}_{z}-z_{i})$ which are only joined at output times. Figure \ref{fig:eABF traj} gives a numerical example for the application of eABF and figure \ref{fig:eABF flowchart} shows a schematic overview of the full eABF/CZAR algorithm.
+which is called \textit{Corrected z-averaged restraint} (CZAR)\autocite{lesage2017smoothed} and can be calculated on-the-fly during the simulation at little extra cost by introducing two additional accumulators for $P^B(\xi_i)$ and $k(\braket{\lambda_i}_{z}-z_{i})$ which are only joined at output times. Figure \ref{fig:eABF traj} gives a numerical example for the application of eABF and figure \ref{fig:eABF flowchart} shows a flowchart of the full eABF/CZAR algorithm.
 
 \begin{figure}[H]
     \centering
@@ -364,10 +376,9 @@ which is called \textit{Corrected z-averaged restraint} (CZAR)\autocite{lesage20
 \end{figure}
 
 The CZAR estimator is able to recover the unbiased free energy derivative only from time trajectory $(z_i,\lambda_i)$ of the extended system, independent of the bias on $\lambda_i$.
-The eABF enhanced sampling algorithm is therefore completely independent of the CZAR free energy estimate.
-Free energy estimates from extended system dynamics are therefore not limited to the ABF algorithm, but can be used with any arbitrary CV-based enhanced sampling algorithm, for example metadynamics (eMtD).
+The eABF enhanced sampling algorithm is therefore completely independent of the CZAR estimate for the free energy gradient and free energy estimates from extended system dynamics are not limited to the ABF algorithm, but can be used with any arbitrary CV-based enhanced sampling algorithm, for example metadynamics (eMtD).
 One particularly useful choice is to combine repulsive MtD or WTM potentials with the eABF biasing force, an idea the authors figuratively described with 'Shaving Barriers, and Flooding Valleys'.\autocite{fu2018zooming}
-In this way, the inherent difficulty in ABF methods for obtaining accurate force estimates in high free energy regions at the beginning of the simulation can be solved by pushing the system towards this regions.
+In this way, the inherent difficulty in ABF methods to obtain accurate force estimates in high free energy regions at the beginning of the simulation can be solved by pushing the system towards this regions.
 The full MtD-eABF and WTM-eABF bias terms read
 \begin{equation}
   F^{MtD-eABF}(\lambda_i, t) = -\frac{\braket{\xi_i(\textbf{x})-\lambda_i}_{\lambda_i}}{\beta \sigma_i^2}+\frac{\partial}{\partial \lambda_i} U^{MtD}(\lambda_i,t)
@@ -377,8 +388,8 @@ The full MtD-eABF and WTM-eABF bias terms read
 \end{equation}
 with $U^{MtD}$ and $U^{WTM}$ given by equations \ref{eq:U_mtD} and \ref{eq:WTM}, respectively.
 The relative contributions of the eABF and MtD/WTM term will fluctuate over the course of a simulation, but the sum of both will eventually converge.
-For the parameters of MtD or WTM potentials a broud range of save choices exist, as they only influence the enhanced sampling and not the free energy estimate.
-For the limit $U^{MtD/WTM}\rightarrow 0$ standard eABF is recovered. A upper bound is only given by the requirement of sampling the canonical ensemble and staying close to thermal equilibrium.
+For the parameters of MtD or WTM potentials a broad range of save choices exist, as they only influence enhanced sampling and not the free energy estimate.
+Specifically for the limit $U^{MtD/WTM}\rightarrow 0$ standard eABF is recovered, whereas a upper bound is only given by the requirement of sampling the canonical ensemble and staying close to thermal equilibrium.
 
 \newpage
 \subsection{Convergence Acceleration for Adaptive Biasing Methods}
@@ -395,33 +406,31 @@ Specifically he shows that if a simulation of length $\mathcal{L}$ converges in 
 \begin{equation}
   t_0 > \sum^S_i t_i'
 \end{equation}
-In other words stratification also reduces the total simulation time. Figure~\ref{fig:stratification} gives an example for the application of stratification in ABF simulations.
+In other words stratification reduces not only the relative, but also the total simulation time. Figure~\ref{fig:stratification} gives an example for the application of stratification in ABF simulations.
 \begin{figure}[H]
     \centering
     \includegraphics[width=1\textwidth]{bilder/ABF_stratification}
     \caption{Application of the stratification strategy for ABF simulations. $\xi$ is the x-direction. Two simulations are carried out for $\xi=60-120$~Bohr and $\xi=120-180$~Bohr. After both simulations are converged, their force estimates are joined at $\xi=120$~Bohr, as shown on the left.
     Integrating the joined force estimates gives the combined PES shown on the right.
-    Details are given in the Appendix.}
+    }
 \label{fig:stratification}%
 \end{figure}
-
-Multiple walker strategies take parallelization one step further by allowing more than one walker to contribute to the same window.
-For this purpose multiple schemes were proposed, ranging from simply running similar independent simulations in parallel, to complex ones involving selection rules or replica exchange between simulations at different temperatures.\autocite{wilson2011molecular,comer2014calculation,minoukadeh2010potential}
-Here, we will look at a relatively simple scheme, termed \textit{shared adaptive biasing method}\autocite{comer2015adaptive}, where all accumulators $f$ required for the respective method, such as histograms, force estimates, or potentials, are synced between otherwise independent walkers in fixed time intervals. %Global and local accumulators evolve according to the following update scheme
-%\begin{enumerate}
-%  \item $f_{l}(t_{sync}) \leftarrow f_{g} + \biggl(f_{l}(t_{sync})-f_{l}(t_{sync}-1) \biggr)$
-%  \item $f_{g} \leftarrow f_{l}(t_{sync})$
-%\end{enumerate}
-%where at synchronization times $t_{sync}$ the local accumulators are set to the current global value $f_{g}$ plus the progress of the local walker since the last sync.
+For big systems, for example in biochemical context, slow degrees of freedom orthogonal to the CV can lead wrong estimates of the PMF due to nonergodic sampling.\autocite{minoukadeh2010potential}
+One walker might only visit a small portion of parallel valleys, as it is trapped in a specific region of configuration-space.
+Such \textit{hidden-barriers} cannot be explicitly addressed by the enhanced-sampling algorithm, as it has no knowledge about them.\autocite{fu2019taming}
+Stratification might even act counterproductive by cutting off possible channels between orthogonal degrees of freedom.\autocite{comer2015adaptive}
+One possible solution to this intrinsic, but often severe shortcoming of adaptive biasing methods is the application of Multiple-Walker (MW) strategies.
+The idea is that every contributing walker can be expected to sample different parallel valleys, which results in more reliable free energy estimates.\autocite{minoukadeh2010potential}
+The simplest approach is to combine the PMFs of multiple independent simulations.
+Especially useful for the combination of independent adaptive biasing simulations is the CZAR estimator, as it can be applied similar to the WHAM equations to combined data of different time trajectories.\autocite{lesage2017smoothed}
+However, more involved strategies, that include periodical communication between individual walkers during the simulation, were shown to improve ergodic sampling significantly.\autocite{fu2019taming}
+For this purpose multiple schemes of different complexity were proposed.\autocite{wilson2011molecular,comer2014calculation,minoukadeh2010potential}
+Here, a relatively simple scheme, termed \textit{shared adaptive biasing method}\autocite{comer2015adaptive}, will be discussed.
+For this purpose all accumulators $f$ required for the respective method, such as histograms, force estimates, or potentials, are synced between otherwise independent walkers in fixed time intervals.
 For this purpose global contributions $f_g$ are stored in one shared buffer file.
-This way all walkers contribute to the same bias and achieve much faster convergence.
+This way all walkers contribute to the same bias.
 Typically the synchronization interval $t_{sync}$ is chosen much bigger than the MD step size.
 Most of the time different walkers are located in different bins along the CV and sharing the bias after every MD step would therefore not change the overall dynamics.
-This way communication between individual walkers can be kept minimal.
+The communication between individual walkers can thus be kept to a minimum.
 Additionally no master node is needed, as the buffer is simply accessed by each walker in fixed intervals.
-To avoid inconsistency, access to the buffer only granted to one walker simultaneously.
-If write access to the buffer is denied for a walker, it will share its progress at the next synchronization time.
-
-This scheme, which was developed specifically for ABF simulations, was shown to be particularly useful for complex reactions, for example in biochemical context, where several transition mechanisms can be associated with the same CV and multiple parallel valleys have to be sampled for reliable PMF estimates.\autocite{minoukadeh2010potential}
-In this case one walker only visits a small portion of this parallel valleys, as it is trapped in a specific region of configuration-space orthogonal to the CV.
-With shared biases every contributing walker can be expected to sample different parallel valleys, which results in more reliable free energy estimates.
+Overall, fast convergence of the shared bias leads to more uniform sampling of the reaction coordinate by all walkers, even if only relatively short individual trajectories are accessible.

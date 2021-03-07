@@ -1,16 +1,16 @@
 \documentclass[
-	12pt,                      % Schriftgroesse 12pt
-	a4paper,                   % Layout fuer Din A4
+	12pt,                      % Schriftgrösse 12pt
+	a4paper,                   % Layout für Din A4
 	english,                   % neue deutsche Rechtschreibung nach der Reform
-	oneside,                   % Layout fuer einseitigen Druck
-	headinclude,               % Kopfzeile wird Seiten-Layouts mit beruecksichtigt
+	oneside,                   % Layout für einseitigen Druck
+	headinclude,               % Kopfzeile wird Seiten-Layouts mit berücksichtigt
 	headsepline,               % horizontale Linie unter Kolumnentitel
 	plainheadsepline,          % horizontale Linie auch beim plain-Style
 	BCOR=12mm,                  % Korrektur für die Bindung
 	DIV=18,                    % DIV-Wert für die Erstellung des Satzspiegels, siehe scrguide
 	parskip=half,              % Absatzabstand statt Absatzeinzug
 	openany,                   % Kapitel können auf geraden und ungeraden Seiten beginnen
-	bibliography=totoc,        % Literaturverz. wird in und sonstige verzeichnisse mit ins Inhaltsverzeichnis
+	bibliography=totoc,        % Literaturverz. wird in und sonstige Verzeichnisse mit ins Inhaltsverzeichnis
 	numbers=noenddot,          % Kapitelnummern immer ohne Punkt
 	captions=tableheading,     % korrekte Abstaende bei TabellenUEBERschriften3
 	]{scrbook}[2001/07/30]     % scrbook-Version mind. 2.8j von 2001/07/30
@@ -64,6 +64,10 @@
 \usepackage{algorithmic}
 \usepackage{csquotes}
 \usepackage{stix}           % changes all fonts !
+\usepackage{wrapfig}
+
+\usepackage{color, colortbl}
+\definecolor{Gray}{gray}{0.9}
 
 % use Tikz to draw graphics
 \usepackage{tikz}
@@ -79,7 +83,7 @@ minimum height=1.5em, text width=2em]
 
 \usepackage[
 	backend=biber,
-	style=chem-angew,			% Style Angewante Chemie
+	style=chem-angew,			% Style Angewandte Chemie
 ]{biblatex}     		 		% Biblatex Paket für Referenzen
 \addbibresource{literatur.bib}	% File were you store sources
 
@@ -125,18 +129,16 @@ minimum height=1.5em, text width=2em]
 %\ihead[]{\headmark}              % Kolumnentitel immer oben innen
 %\ohead[\pagemark]{\pagemark}     % Seitennummern immer oben aussen
 %\lefoot[]{}
-%\rofoot[]{}                      % Seitennummern in der Fusszeile loeschen
+%\rofoot[]{}                      % Seitennummern in der Fusszeile löschen
 
 \newcommand {\jkarray}[1]{\ensuremath{\underline{#1}}}
 \newcommand {\jkmatrix}[1]{\ensuremath{\underline{\underline{#1}}}}
 \newcommand {\einheit}[1]{\ensuremath{\mathrm{\left[#1\right]}}}
 \newcommand {\lived}[2]{($\ast$#1, $\dagger$#2)}  %
 
-
-
 %###########################################################################################################
 %
-% Parameter fÃƒÂ¼r die jeweiligen Packete definieren
+% Parameter für die jeweiligen Pakete definieren
 %
 %###########################################################################################################
 
@@ -287,16 +289,15 @@ minimum height=1.5em, text width=2em]
 
 	\pagenumbering{Roman}         % romanische Nummerierung für die Deckblätter, Inhaltsverzeichnis und co.
 
-	%\include{deckblatt_teil1}     % Deckblatt Titel
-	%\include{deckblatt_teil2}
+	\include{deckblatt_teil1}     % Deckblatt Titel
+	\include{deckblatt_teil2}     % Erklärung
+
+	\include{danksagung}
 	\include{symbols}
 
-	\setheadsepline{0.5pt}        % Dicke der Trennlinie Kopfzeile - Text
-
+	\setheadsepline{0.5pt}
 	\tableofcontents              % Inhaltsverzeichnis
-
 	\clearpage
-
 	\setcounter{romanPagenumber}{\value{page}} % eigener Seitenzähler erhält aktuelle römische Seitenzahl
 
 	\mainmatter                   % den Hauptteil beginnen
@@ -306,19 +307,20 @@ minimum height=1.5em, text width=2em]
 	\include{theory}
   \include{comp_details}
 	\include{results}
-  \include{appendix}
-	\appendix                     % Anhang
+	\include{conclusion}
 
 	\backmatter
-	\pagenumbering{Roman}                    % für letzte Verzeichnisse wieder romanische Nummerierung
+	\pagenumbering{Roman}                    % romanische Nummerierung
 	\sectionnumbering{Roman}
 	\setcounter{page}{\theromanPagenumber}   % setzt die aktuelle Seitenzahl von vorne für die romanische Nummerierung fest
 
+	\include{appendix}
+	\appendix
 	\listoftables
 	\listoffigures
 
 %   \nocite{*}								 % auch Quellen die nicht verwendet wurden tauchen in Literaturverzeichnis auf
 	\inputencoding{utf8}
-	\printbibliography[title=Bibliography]   % gibt Literaturverzeichnis aus
+	\printbibliography[title=Bibliography]   % Literaturverzeichnis
 
 \end{document}

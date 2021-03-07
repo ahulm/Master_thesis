@@ -1,2 +1,42 @@
 \chapter{Introduction}
 \label{cha:introduction}
+Free energy differences are the driving force of chemical processes at or near thermodynamic equilibrium and therefore the central quantity that determines the behavior of these systems.\autocite{chipot2007free}
+However, the calculation of free energies still constitutes one of the major challenges of computational chemistry.\autocite{kastner2011umbrella}
+This is because free energy contains entropy, which is a measure for the available space of a system.
+For more than a few atoms, mapping available space requires extensive sampling, making free energy calculations computationally exceedingly demanding.\autocite{kollman1993free}
+Therefore, although the statistical-mechanical foundations for the calculation of free energy curves were laid decades ago,\autocite{chipot2007free} it is only in recent years that increasing computational power combined with major advances in the efficiency of quantum-mechanical/molecular-mechanical (QM/MM) codes\autocite{ochsenfeld2007linear,shao2015advances,acun2018scalable} made their application possible.
+Today free energy calculations are frequently used in several important areas ranging from biochemistry\autocite{gumbart2013standard,fu2017new,capelli2019chasing}, to pharmacology\autocite{yu2017computer,sinko2013accounting} or
+nanotechnology.\autocite{fu2017lubricating,chen2019tumbling}
+
+In practice to sample configurations of chemical systems time trajectories are calculated by means of molecular dynamics (MD) or Monte-Carlo (MC) simulations.\autocite{ponder2003force,burke2012perspective}
+However, as most chemical reactions involve crossing of free energy barriers, reaction coordinates often constitute slow degrees of freedom.
+This means that trajectories stay kinetically trapped in \textit{metastable} states, e.g., the educt or product state, and are unable to explore the full reaction coordinate.\autocite{chipot2007free}
+%Simple trajectories are therefore poorly suited for sampling of reaction coordinates.\autocite{chipot2007free}
+To address this problem the vary active research field of \textit{enhanced sampling} emerged, which has already produced numerous different approaches to speed up exploration of reaction coordinates.
+\autocite{jiang2010free, sugita1999replica,den2000thermodynamic, ciccotti2005blue, barducci2008well}
+
+One particular successful class of algorithms relies on the definition of \textit{collective variables} (CVs).
+This variables need to distinguish between the educt and product states, while ideally capturing all slow degrees of freedom along the way.\autocite{fiorin2013using}
+Typically maximal two dimensional variables are chosen, because of the massive growth of computational cost of sampling in higher dimensional space, also known as \textit{curse of dimensionality}.\autocite{koppen2000curse}
+The potential energy or forces along the CVs are then altered in a way, that increases the time spent in important regions.
+One of the oldest and most widespread approaches is \textit{Umbrella Sampling}\autocite{kastner2011umbrella}, where bias potentials along the reaction coordinate drive a system from the reactant to the product state.
+The intermediate steps are covered by a series of windows, in each of which a MD simulation is performed.
+From this simulations the full free energy curve can be calculated by combining all windows with the weighted histogram analysis method (WHAM).\autocite{kumar1992weighted}
+This approach enables efficient sampling along the reaction coordinate due to parallelisation.
+However, it also requires some knowledge of the free energy curve prior to simulation in order to adequately choose the bias potentials.
+In addition, setting up and analyzing multiple MD simulations requires huge computer resources and is time consuming.
+
+To address both shortcomings this thesis will focus on another class of enhanced sampling algorithms, termed \textit{adaptive biasing} methods.\autocite{barducci2008well,comer2015adaptive,lesage2017smoothed}
+Here a time-dependent, self-learning bias potential or force is introduced, that evolves during the simulation to encourage uniform sampling along the CV.
+One can think of two complementary approaches to build time-dependent biases:
+The first one, e.g., \textit{metadynamics} (MtD)\autocite{barducci2011metadynamics} and its variants, encourages sampling by flooding valleys of the free energy landscape with a time-dependent potential.
+Because of its simplicity and straightforward implementation it has been integrated in almost all popular MD engines and was broadly utilized for a large variety of problems.\autocite{vymetal2011gyration,tanida2020alchemical,ikeda2005hydration}
+The second one, termed \textit{adaptive biasing force} (ABF)\autocite{comer2015adaptive} method, flattens the free energy landscape by application of a time-dependent bias force.
+Despite its outstanding stability and beneficial formal convergence properties, the practical implementation and application of ABF has been thwarted by the analytical formulation of the biasing forces, thereby limiting the scope of the numerical scheme.\autocite{fiorin2013using}
+Recently this limitations could been lifted by extended-Lagrangian based methods, where a fictitious particle is coupled to the CV.
+In this framework the bias force used for enhanced sampling only acts on the fictitious particle, which renders its implementation trivial.
+The resulting extended-system ABF (eABF)\autocite{lesage2017smoothed} method combines the wide applicability of MtD with the convergence properties of ABF.
+Additionally the calculation of free energy curves can be separated from sampling acceleration with an asymptotically unbiased free energy gradient estimator, termed \textit{corrected z-averaged restraint} (CZAR).\autocite{lesage2017smoothed}
+The resulting flexibility in the choice of bias force can be used to combine both metadynamics and ABF to well-tempered metadynamics extended-system ABF (WTM-eABF),\autocite{fu2018zooming,fu2019taming} a highly potent enhanced-sampling scheme, which stands out due to its efficiency and robustness.
+
+In this thesis all aforementioned adaptive biasing algorithms are combined with highly efficient QM/MM calculations in the in-house FermiONs++\autocite{kussmann2013linear} program package, to enable the broad application of free energy calculations for large molecular systems at accurate level of theory.

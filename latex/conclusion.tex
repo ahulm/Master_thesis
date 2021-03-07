@@ -1,0 +1,25 @@
+\chapter{Conclusion and Outlook}
+\label{cha:conclusion}
+Observing slow chemical reactions in molecular simulations still constitutes a enormous theoretical challenge.
+Transitions between reactants are often rare events, that might happen on timescales far beyond what is computationally feasible.
+In this thesis modern enhanced sampling algorithms, that enable diffusive behavior along reaction coordinates in short MD trajectories, are combined with highly efficient and accurate quantum-chemical methods in the in-house program package FermiONs++.
+%The result is highly efficient importance-sampling of reaction coordinates, which enables the calculation of free energy curves on accurate quantum-chemical level of theory for a wide range of molecular processes.
+Major strengths of the presented methods are:
+\begin{enumerate}
+  \item Uniform sampling of reaction coordinates in single trajectories of only few picoseconds,
+  %\item faster convergence of free energy curves with the amount of sampled data,
+  \item on-the-fly free energy estimates during the simulation for 1D reaction coordinates
+  \item and the availability of a range of flexible strategies for parallelization that enable scaleable speedup.
+\end{enumerate}
+Especially promising is the application of ABF in an extended-Lagrangian based framework, where fictitious particles are coupled to CVs with harmonic potentials.
+Together with CZAR, an asymptotically unbiased estimator for the free energy gradient, sampling acceleration is completely separated from free energy estimation.
+This enables the combination of ABF with metadynamics to WTM-eABF/CZAR, a "working horse" algorithm, which stands out due to its wide applicability, robustness to input parameters and high efficiency.
+Overall, by dramatically reducing the effort for the calculation of free energy curves this advances contribute towards making the calculation of free energy curves a routine tool in the characterization of chemical reactions.
+
+However, even armed with enhanced-sampling strategies of utmost efficiency, considering that CVs selected from chemical intuition may not adequately describe the structural transformation at hand, free energy calculations can still fail by nonergodic sampling of orthogonal-space.
+Additionally, if the collective variable does not include all slow degrees of freedom of a given transition, diffusion between reactant and product states might be hindered.
+By applying multiple-walker strategies, like shared-adaptive biasing, this problem can be addressed by massive sampling though parallelisation.
+Introducing replica-exchange (e.g., REX-WTM-eABF\autocite{fu2019taming}) promises further improvements by making high temperature configurations available to low temperature walkers and vice versa.
+Another important direction of current research is the development of methods to improve or even completely automatize the selection of appropriate CVs, thus eliminating the intrinsic shortcoming of all CV based enhanced sampling algorithms.
+For this purpose a variety of CV-discovery approaches were proposed, for example time-lagged independent component analysis (TICA)\autocite{perez2013identification}, autoencoders\autocite{reiter2019using} or deep machine learning\autocite{brandt2018machine,rydzewski2020multiscale}.
+Another interesting approach for further improvement could be the combination of WTM-eABF with dynamically optimized CVs, which were already successfully applied for metadynamics.\autocite{brotzakis2018accelerating}

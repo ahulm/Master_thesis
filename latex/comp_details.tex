@@ -1,46 +1,9 @@
 \chapter{Computational Details}
 \label{cha:comp}
 
-\section{2D Test Potentials}
-\label{sec:comp 2D}
-For test purposes we consider a single particle of mass $10$~a.u. moving in two-dimensional potentials of the form
-\begin{equation}
-  U_1(x,y) = a(x-c)^2(x+d)^2 + by^2 \label{eq:U1}
-\end{equation}
-\begin{equation}
-  U_2(x,y) = -\ln\bigl( e^{-a(x+c)^2 - b(y-d)^2} + e^{-a(x+c)^2 - b(y+d)^2} \bigr) \label{eq:U2}
-\end{equation}
-where $x,y$ are particle coordinates and $a,b,c,d$ are parameters of the potentials given in table~\ref{tab:2D pots} of the appendix, respectively.
-\begin{figure}[H]
-    \centering
-    \includegraphics[width=1.0\textwidth]{bilder/U}
-    \caption{Potentials for test calculations, Minima of $U_1$ are at located at (80,0) and (160,0). Minima of $U_2$ are located at (-40,-20) and (40,20). In both potentials minima are separated by free energy barriers of $20$~kJ/mol.}
-\label{fig:potentials}%
-\end{figure}
-To simulate the particles dynamics a Velocity Verlet\autocite{swope1982computer} integrator is applied with a time step of 5~fs.
-The initial momenta are drawn randomly from a Maxwell-Boltzmann distribution at 300~K.
-Afterwards the temperature is controlled at 300~K by a Langevin thermostat\autocite{kroger2005models} with friction constant 0.001~fs$^{-1}$.
-Crucial to the metastability of the system is the ratio of thermal energy~$k_B T$ to the barrier height.
-Here, we always use transition barriers of height 8~$k_B T$ (20~kJ/mol).
-Spontaneous transitions between minima in unbiased simulations can therefore be expected to be rare events.
-All test simulation are completely performed in Python.
-
-\section{Molecular Dynamics Simulations}
-\label{sec:comp MD}
-For QM simulations a Python interface for the in-house program suite FermiONs++\autocite{} was used.
-Propagation of atomic coordinates with the Velocity Verlet\autocite{swope1982computer} integrator and temperature control with the Langevin thermostat\autocite{kroger2005models} (see algorithm~\ref{alg:ABM}) is done in Python.
-For QM energy and gradient evaluation the PyFermiONsInterface was used.
-All systems are simulated in vacuum.
-To generate starting structures for MD simulations minimum energy geometries are obtained with the FermiONs intern geometry optimizer. MD simulations always consist of the following three steps:
-\begin{enumerate}
-  \item \textit{Heating}: Simulations are heated from 1~K to 300~K in 3000 time steps with a step size of 0.1~fs. Initial momenta are randomly drawn from a Maxwell-Boltzmann distribution. The velocities are rescaled every 10~time steps to increase the temperature by 1~K.
-  \item \textit{Equillibration}: For thermal equilibration of the heated system is simulated for 1.0~ps under application of the Langevin thermostat at 300~K with a friction coefficient of 0.001~fs$^{-1}$. The time-step is increased to 0.5~fs. To produce starting structures for free energy estimation the system is also confined to the range of interest in CV space with harmonic walls.
-  \item \textit{Production}: For production runs the equilibrated system is simulated under additional application of some enhanced sampling algorithm (see section~\ref{sec:comp ABM}).
-\end{enumerate}
-
 \section{Adaptive Biasing Implementation}
 \label{sec:comp ABM}
-All biasing algorithms are implemented in Python under extensive use of NumPy\autocite{harris2020array} and the PyFermiONsInterface.
+All biasing algorithms were implemented in the python interface of the in-house program suite FermiONs++ under extensive use of NumPy\autocite{harris2020array}.
 For all methods the range of interest in CV space ($\xi_{min},\xi_{max}$), as well as the bin width $\Delta\xi$ are input parameters.
 Simulations are restraint to this range by harmonic walls of the form
 \begin{equation}
@@ -51,20 +14,20 @@ U^c(\xi) =\left\{\begin{array}{ll} \frac{k^c}{2}\bigl(\xi(\textbf{x}) - \xi^c_{m
 \label{eq:harmonic wall}
 \end{equation}
 with restraining force constant $k^c$ and boundary of the simulation $\xi^c$.
-For all simulations a stiff restraining force constant of $k^c=1000$~kJ/(mol$\Delta\xi^2$) is applied. The choice of boundaries ($\xi^c_{min}$,$\xi^c_{max}$) depends on the specific method and will be discussed in the following sections.
+For all simulations a stiff restraining force constant of $k^c=1000$~kJ/(mol$\Delta\xi^2$) was applied. The choice of boundaries ($\xi^c_{min}$,$\xi^c_{max}$) depends on the specific method and will be discussed in the following sections.
 Probability distributions and free energy estimates are computed on fixed grids of the form ($f(\xi_{min}),f(\xi_{min}+\Delta\xi),...,f(\xi_{max})$).
 All algorithms are computationally lightweight compared to QM energy and force evaluations and their impact on the overall computation time is negligible.
 
-\subsection{MtD/WTM}
+\subsection{Metadynamics Potentials}
 \label{subsec:implement MtD}
 MtD/WTM potentials are accumulated on grids and free energy estimates obtained from equations~\ref{eq:F est MtD}/\ref{eq:F est WTM} are written to an output file in fixed intervals.
-For MtD the height and variance of Gaussian hills $W$ and $\sigma_G$, as well as frequency of hill creation $\tau_G$ are input parameters. For WTM additionally $\Delta T$ is chosen to control how fast the Gaussian height decreases. Default parameters are given in table~\ref{tab:metaparams}.
+For MtD the height and variance of Gaussian hills $W$ and $\sigma_G$, as well as frequency of hill creation $\tau_G$ are input parameters. For WTM additionally $\Delta T$ has to be chosen to control how fast the Gaussian height decreases. Default parameters are given in table~\ref{tab:metaparams}.
 \begin{table}[H]
       \centering
          \caption{Default parameters for MtD/WTM simulations.}
          \begin{tabular}{ c  c }
                  \hline
-                  $\sigma_G$  & -        \\
+                  $\sigma_{G}$  & $\Delta \xi$  \\
                   $W$         & 1~kJ/mol \\
                   $\tau_G$    & 10~fs    \\
                   $\Delta T$  & 2000~K   \\
@@ -76,13 +39,13 @@ The MtD/WTM bias forces given by derivatives of eq.~\ref{eq:U_mtD}/\ref{eq:WTM} 
 In long simulations this is much more efficient than evaluating each hill at every step and yields negligible errors.\autocite{fiorin2013using}
 The boundaries for the confinement of the simulation are set to
 $\xi^c_{min}=\xi_{min}+2\Delta\xi$ and $\xi^c_{max}=\xi_{max}-2\Delta\xi$ for the lower and higher boundary, respectively, to avoid that the system is pushed out of the grid by the repulsive MtD/WTM potential.
-To avoid that the bias forces suddenly vanish at the boundary they are calculated from hill centers near the margin, if the system still leafs the grid.
+To avoid discontinuity of bias forces at the margins they are calculated from hill centers near the margin in case the system still leaves the grid.
 The resulting PMF will show a sharp increase at the margin, where the wall potential kicks in.
 
-\subsection{ABF, eABF and WTM-eABF}
+\subsection{Adaptive Biasing Force Methods}
 For ABF calculations two accumulators are used to store the biased histogram and sum of instantaneous force samples. The mean force is evaluated according to eq.~\ref{eq:mean force}.
-The only ABF specific input parameter is the number of samples $N_{full}$ given to ramp function~\ref{eq:ramp}.
-Force samples are calculated by eq.~\ref{eq:inst ABF force} and the inverse gradient is always chosen as $\textbf{v}_i = \nabla \xi_i/|\nabla \xi_i|^2$. Expressions for the divergence of $\textbf{v}_i$ for all applied CVs are given in the Appendix.
+The only ABF specific input parameter is the number of samples $N_{full}$ given to the ramp function (eq. \ref{eq:ramp}).
+Force samples are calculated by eq.~\ref{eq:inst ABF force} where the inverse gradient is always chosen as $\textbf{v}_i = \nabla \xi_i/|\nabla \xi_i|^2$. Expressions for the divergence of $\textbf{v}_i$ for all applied CVs are given in the appendix.
 Constraints~\ref{eq:cond1} and \ref{eq:cond2} have to be fulfilled by choice of CV.
 Harmonic walls are used to constrain the system to the range of interest.
 Since the ABF force is not repulsive it is sufficient to apply the restraining force directly at the margin of the grid ($\xi^c_{min}=\xi_{min}$, $\xi^c_{max}=\xi_{max}$).
@@ -94,21 +57,21 @@ Instead of directly choosing $k_\lambda$ the \textit{thermal width} of coupling 
   k_\lambda = \frac{1}{\beta \sigma^2}
 \end{equation}
 The propagation of fictitious particles with a Velocity-Verlet\autocite{swope1982computer} integrator and temperature control by a Langevin thermostat\autocite{kroger2005models} is done completely independent of the physical system, but always using the same parameters.
-$\xi$-conditioned expressions for CZAR are stored independently of $\lambda$-conditioned expressions for the eABF bias and CZAR estimates for the thermodynamic force on $\xi$ are computed at output times.
-Additionally CZAR can be evaluated from trajectories of $\xi$ and $\lambda$ after the simulation has finished.
-This way enhanced sampling and free energy estimation are completely independent.
-MtD/WTM potentials and forces for (meta/WTM)-eABF are calculated as described in section~\ref{subsec:implement MtD} and eABF forces are accumulated separately.
+$\xi$-conditioned expressions for CZAR are stored independently of $\lambda$-conditioned expressions for the eABF bias and CZAR estimates for the free energy gradient are only computed at output times.
+Additionally time trajectories of $\xi$ and $\lambda$ are stored, which contain the full information to calculate CZAR estimates in a post-processing step with flexible bin with.
+For (meta/WTM)-eABF MtD or WTM forces are calculated as described in section~\ref{subsec:implement MtD} and accumulated separately form eABF forces.
 Boundaries for the confinement of $\lambda$ are set to $\xi^c_{min}=\xi_{min}+2\sigma_\lambda$ and $\xi^c_{max}=\xi_{max}-2\sigma_\lambda$ for the lower and higher boundary, respectively. This way save confinement of $\xi$ to the region of interest is ensured only by its coupling to $\lambda$.
 
-For 1D CVs PMFs are obtained at output times by numerically integrating the ABF or CZAR estimates of the thermodynamic force with the rectangular rule.\autocite{davis2007methods}
-To generate 2D PMFs force estimates for both dimensions are stored and integrated separately with the FEM method.
-For this purpose four control points are obtained between original data points by linear interpolation. The RMSD between B-spline functions and control points (eq. \ref{eq:RMSD}) is than minimized with the Broyden–Fletcher–Goldfarb–Shanno (BFGS) algorithm.\autocite{nocedal2006numerical}
+For 1D CVs PMFs are obtained at output times by numerically integrating ABF or CZAR estimates of the free energy gradient with the rectangular rule.\autocite{davis2007methods}
+To generate 2D PMFs force estimates for both dimensions have to be integrated with the FEM method in a post-processing step.
+For this purpose coefficients $\vec{\alpha}$ are initialized as zero vector.
+Four control points are obtained between original data points by linear interpolation, to increase the smoothness of the obtained PMF.
+Equation~\ref{eq:FEM} is minimized on control points with the Broyden-Fletcher-Goldfarb-Shanno (BFGS) algorithm provided by the SciPy library.\autocite{nocedal2006numerical,virtanen2020scipy}
 
 \begin{figure}[H]
    \caption{
      Flowchart of the eABF algorithm. $k_{\lambda}$ and $k_\xi$ denote $\lambda$ or $\xi$ conditioned bin indices, respectively, in bins with size $\Delta\xi$. $P^B_\lambda$ and $P^B_\xi$ are $\lambda$- or $\xi$- conditioned histograms and $R$ is the ABF ramp function. $F_B$ is the sum of force samples. Outputs are written in fixed intervals.
    }
-
         \centering
         \begin{tikzpicture}[minimum size=5mm,node distance=4cm and 7cm,>=stealth,bend angle=45,auto]
         \node [block] (xi) {$\xi \leftarrow f(\textbf{x})$};
@@ -176,3 +139,97 @@ For this purpose four control points are obtained between original data points b
         \end{tikzpicture}
         \label{fig:eABF flowchart}
 \end{figure}
+
+\subsection{Shared-Adaptive Biasing}
+For shared adaptive biasing individual walkers sync the progress of accumulators containing bias forces or potentials, or other relevant information, in a shared buffer file.
+For this purpose walkers read the state of the buffer in fixed time intervals, add their progress since the last synchronization and continue the dynamics with the new state of the shared bias.
+To prevent inconsistency of the buffer walkers set the access permission to \textit{read only} for other walkers during synchronization.
+If synchronization is denied to a walker for more than 1~second it will continue the simulation and share its progress at the next synchronization time.
+Per default synchronization intervals are chosen as 10~fs, which corresponds to the default interval for deposition of Gaussian hills $\tau_G$ in metadynamics.
+\newpage
+\section{2D Test Potentials}
+\label{sec:comp 2D}
+For test purposes a single particle of mass $10$~a.u. was considered, moving in two-dimensional potentials of the form
+\begin{equation}
+  U_1(x,y) = a(x-c)^2(x+d)^2 + by^2 \label{eq:U1}
+\end{equation}
+\begin{equation}
+  U_2(x,y) = -\ln\bigl( e^{-a(x+c)^2 - b(y-d)^2} + e^{-a(x+c)^2 - b(y+d)^2} \bigr) \label{eq:U2}
+\end{equation}
+where $x,y$ are particle coordinates and $a,b,c,d$ are parameters of the potentials given in table~\ref{tab:2D pots} of the appendix, respectively.
+\begin{figure}[H]
+    \centering
+    \includegraphics[width=1.0\textwidth]{bilder/U}
+    \caption{Potentials for test calculations, Minima of $U_1$ are at located at (80,0) and (160,0). Minima of $U_2$ are located at (-40,-20) and (40,20). In both potentials two metastable states are separated by free energy barriers of roughly $20$~kJ/mol, which corresponds to 8~$k_B T$ at 300~K.}
+\label{fig:potentials}%
+\end{figure}
+To simulate the particles dynamics a Velocity Verlet\autocite{swope1982computer} integrator was applied with a time step of 5~fs.
+The initial momenta were drawn randomly from a Maxwell-Boltzmann distribution at 300~K.
+Afterwards the temperature was controlled at 300~K by a Langevin thermostat\autocite{kroger2005models} with friction constant 0.001~fs$^{-1}$.
+Crucial to the metastability of the system is the ratio of thermal energy~$k_B T$ to the barrier height.
+Here, transition barriers of roughly 8~$k_B T$ (20~kJ/mol) was used.
+Spontaneous transitions between minima in unbiased simulations can therefore be expected to be rare events.
+All test simulation were completely performed in Python.
+\newpage
+\section{Molecular Dynamics Simulations}
+\label{sec:comp MD}
+For QM simulations a Python interface for the in-house program suite FermiONs++\autocite{kussmann2013pre,kussmann2017hybrid,laqua2018efficient} was used.
+To generate starting structures for MD simulations minimum energy geometries were obtained with the FermiONs intern geometry optimizer.
+Propagation of atomic coordinates with a Velocity Verlet\autocite{swope1982computer} integrator and temperature control with a Langevin thermostat\autocite{kroger2005models} (see algorithm~\ref{alg:ABM}) was done in Python.
+For QM energy and gradient evaluation the PyFermiONsInterface was used.
+All systems were simulated in vacuum.
+MD simulations always consist of the following three steps:
+\begin{enumerate}
+  \item \textit{Heating}: Simulations were heated from 1~K to 300~K in 3000 time steps with a step size of 0.1~fs. Initial momenta were randomly drawn from a Maxwell-Boltzmann distribution. Velocities were rescaled every 10~time steps to increase the temperature by 1~K.
+  \item \textit{Equillibration}: For thermal equilibration the heated system was simulated for at least 1.0~ps under application of the Langevin thermostat at 300~K with a friction coefficient of 0.001~fs$^{-1}$. The time-step was increased to 0.5~fs. To produce starting points for free energy estimation the system was also confined to the range of interest in CV space with harmonic walls.
+  \item \textit{Production}: For production runs the equilibrated systems were simulated under additional application of one of the aforementioned enhanced-sampling algorithms.
+\end{enumerate}
+
+\subsection{Benchmark calculations}
+Benchmark calculations for adaptive biasing force methods (section~\ref{sec:test}) were performed on Cl-F-ethane.
+For this purpose PMFs for the transition between the gauge$^+$ and gauge$^-$ structure were calculated from 50~ps production MD runs on PBEh-3c/dev2-msvp\autocite{keal2005semiempirical} level of theory.
+All calculation of PMFs from single trajectories were started in the gauge$^+$ structure.
+To test convergence acceleration strategies additional second walkers were started in the gauge$^-$ structure.
+Applied parameters for adaptive biasing algorithms are listed in table~\ref{tab:benchmark params} of the appendix for all simulations.
+\newpage
+\subsection{Illustrative Application to Reactions of Small Molecules}
+To compare the performance of WTM-eABF with Umbrella Sampling a minimal model of the reactive center of Sirtuin 5 (Sirt5), which was already studied in a previous contribution of this group,\autocite{von2019finding} was used.
+The S$_N$2 character of the reaction was captured by taking the difference of the O-C and C-N bond as reaction coordinate.
+\begin{equation}
+  \xi=d_{OC}-d_{CN}
+\end{equation}
+The starting geometry for MD simulations is given in figure~\ref{fig:cl-f-eth}.
+\begin{figure}[H]
+    \centering
+    \includegraphics[width=0.4\textwidth]{bilder/cl-f-eth}
+    \caption{Starting geometry for MD simulations of a minimal model system of the reactive center of Sirt5.}
+\label{fig:cl-f-eth}%
+\end{figure}
+QM calculations of the positively charged system were performed on HF-3c/minix\autocite{sure2013corrected} level of theory.
+In the real biochemical reaction in Sirt5, the two reactants are restricted in their freedom of movement by the surrounding protein. In order to achieve the same in this minimal model, the reactants are held on one line by harmonic potentials with a force constant of 1000~kJ/(mol\AA$^2$).
+For Umbrella Sampling 25~ps trajectories were calculated in 22 windows along the reaction coordinate.
+Starting structures were provided by a previously obtained minimum energy path.
+WTM-eABF/CZAR simulations were performed in a single 50~ps trajectory.
+For the WTM potential Gaussians of initial height $W=2$~kJ/mol and variance $\sigma_G=0.1$~\AA~were deposited every 10~fs.
+The effective temperature was set to $\Delta T=4000$~K.
+The fictitious particle was initialized with a mass of $m_\lambda=30$~a.u. and a thermal width of $\sigma_\lambda=0.05$~\AA.
+To compare the convergence rate of PMFs obtained from Umbrella Sampling and WTM-eABF PMFs were calculated in fixed intervals from time trajectories with MBAR or CZAR, respectively.
+The MBAR equation was solved self-consistently and considered converged, when the largest change of $\beta A_i$ was below 10$^{-7}$ and the norm of $\textbf{g}$, defined in eq.~\ref{eq:g}, was below 10$^{-4}$.
+\newpage
+As a second illustrative example for the application of WTM-eABF/CZAR the formation of deoxyadenosine was considered.
+As reaction coordinate a linear combination of four bond length was applied:
+\begin{equation}
+  \xi = d_{CO} + d_{CC} + d_{OH1} - d_{OH2} \label{eq:CV ool}
+\end{equation}
+The product structure of the system is shown in figure~\ref{fig:cl-f-eth}.
+\begin{figure}[H]
+    \centering
+    \includegraphics[width=0.4\textwidth]{bilder/ool_atoms}
+    \caption{Molecular structure of deoxyadenosine. }
+\label{fig:cl-f-eth}%
+\end{figure}
+QM calculations were performed on PBEh-3c/def2-msvp\autocite{keal2005semiempirical} level of theory.
+For this purpose four 15~ps trajectories where simulated under application of shared-bias WTM-eABF/CZAR.
+For the WTM potential Gaussians of initial height $W=1$~kJ/mol and variance $\sigma_G=0.1$~\AA~were deposited every 10~fs.
+The effective temperature was set to $\Delta T=2000$~K.
+The fictitious particle was initialized with a mass of $m_\lambda=15$~a.u. and a thermal width of $\sigma_\lambda=0.1$~\AA.
